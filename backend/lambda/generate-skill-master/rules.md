@@ -13,5 +13,23 @@
 - 全スキルに日本語のdefinitionを付ける
 - definitionは原則「〜する能力」の形式にする
 - 有効なJSONだけを返す
+- トップレベルはJSONオブジェクトとする
+- トップレベル項目はskillsだけとする
+- skillsは必ずJSON配列とする
+- skills配列の各要素はskill_nameとdefinitionを持つJSONオブジェクトとする
+- skill_masterなどのラッパーオブジェクトを追加しない
+- skillsをJSONオブジェクトにしない
+- スキルが1件の場合でもskillsは配列とする
 - MarkdownコードフェンスやJSON前後の説明文を付けない
 - 同一またはほぼ同一のskill_name・definitionを複数返さない
+
+正しい出力例:
+
+{
+	"skills": [
+		{
+			"skill_name": "プロジェクト管理",
+			"definition": "目標達成に向けて計画立案、進捗管理、リスク統制、関係者調整を行う能力"
+		}
+	]
+}
