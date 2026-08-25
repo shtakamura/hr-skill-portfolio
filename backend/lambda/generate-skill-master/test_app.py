@@ -204,8 +204,8 @@ class GenerateSkillMasterTest(unittest.TestCase):
         self.assertIn("過度に抽象化", fixed_text)
         self.assertIn("近接するサブカテゴリ", fixed_text)
         self.assertIn("接尾語が違うだけ", fixed_text)
-        self.assertIn("BCP対応 -> 事業継続管理", fixed_text)
-        self.assertIn("PMO -> プロジェクト統制", fixed_text)
+        self.assertIn("制度や規格を含む名称を許容する", fixed_text)
+        self.assertIn("スキル数を減らすこと自体を目的にしない", fixed_text)
 
     def test_parse_skill_master_json_accepts_one_skill_name(self):
         import app
