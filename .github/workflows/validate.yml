@@ -1,0 +1,71 @@
+name: Validate (Build & Test)
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+  build-cdk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install CDK dependencies
+        working-directory: infra/cdk
+        run: npm ci
+
+      - name: Build CDK
+        working-directory: infra/cdk
+        run: npm run build
+
+      - name: Run CDK synth
+        working-directory: infra/cdk
+        run: npx cdk synth
+
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        working-directory: backend/lambda/generate-skill-master
+        run: pip install -r requirements.txt pytest
+
+      - name: Run backend tests
+        working-directory: backend/lambda/generate-skill-master
+        run: python -m pytest test_app.py -v
