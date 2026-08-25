@@ -422,7 +422,8 @@ class GenerateSkillMasterTest(unittest.TestCase):
         os.environ["S3_BUCKET_NAME"] = "bucket"
         os.environ["SKILL_MASTER_TABLE_NAME"] = "SkillMaster"
 
-        response = app.handler({"key": "input.csv"}, None)
+        with self.assertLogs(level="INFO") as log_context:
+            response = app.handler({"key": "input.csv"}, None)
         body = json.loads(response["body"])
 
         self.assertEqual(response["statusCode"], 200)
@@ -436,6 +437,10 @@ class GenerateSkillMasterTest(unittest.TestCase):
         self.assertEqual(saved_items[0]["definition"], "")
         self.assertNotIn("usage", saved_items[0])
         self.assertNotIn("stopReason", saved_items[0])
+        self.assertIn(
+            "Bedrock usage: inputTokens=3 outputTokens=4 totalTokens=7 stopReason=end_turn",
+            "\n".join(log_context.output),
+        )
 
         request_body = json.loads(captured_request["body"])
         prompt = request_body["messages"][0]["content"]

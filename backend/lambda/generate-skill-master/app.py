@@ -88,6 +88,13 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         )
 
         logger.info("Saved skill master items: %s", saved_count)
+        logger.info(
+            "Bedrock usage: inputTokens=%s outputTokens=%s totalTokens=%s stopReason=%s",
+            skill_master["usage"]["inputTokens"],
+            skill_master["usage"]["outputTokens"],
+            skill_master["usage"]["totalTokens"],
+            skill_master["stopReason"],
+        )
         return {
             "statusCode": 200,
             "body": json.dumps(
