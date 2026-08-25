@@ -48,10 +48,12 @@ class GenerateSkillMasterTest(unittest.TestCase):
 
         rules = app._load_rules()
 
+        self.assertIn('出力は必ず {"skills":[...]} とする', rules)
         self.assertIn("トップレベル項目はskillsだけとする", rules)
+        self.assertIn("skill_nameやdefinitionをトップレベルへ出力しない", rules)
         self.assertIn("skillsは必ずJSON配列とする", rules)
         self.assertIn("skill_masterなどのラッパーオブジェクトを追加しない", rules)
-        self.assertIn("スキルが1件の場合でもskillsは配列とする", rules)
+        self.assertIn("1件でもskills配列を使用する", rules)
 
     def test_load_rules_reads_utf8_bom_file(self):
         import app
