@@ -43,6 +43,16 @@ class GenerateSkillMasterTest(unittest.TestCase):
         self.assertIn("スキル件数に上限を設けない", rules)
         self.assertIn("有効なJSONだけを返す", rules)
 
+    def test_rules_include_top_level_skills_array_contract(self):
+        import app
+
+        rules = app._load_rules()
+
+        self.assertIn("トップレベル項目はskillsだけとする", rules)
+        self.assertIn("skillsは必ずJSON配列とする", rules)
+        self.assertIn("skill_masterなどのラッパーオブジェクトを追加しない", rules)
+        self.assertIn("スキルが1件の場合でもskillsは配列とする", rules)
+
     def test_load_rules_reads_utf8_bom_file(self):
         import app
 
@@ -104,8 +114,72 @@ class GenerateSkillMasterTest(unittest.TestCase):
     def test_parse_skill_master_json_rejects_zero_skills(self):
         import app
 
-        with self.assertRaises(ValueError):
+        with self.assertRaisesRegex(
+            ValueError, "Generated skills count must be at least 1"
+        ):
             app._parse_skill_master_json('{"skills": []}')
+
+    def test_parse_skill_master_json_rejects_missing_skills(self):
+        import app
+
+        with self.assertRaisesRegex(
+            ValueError, "Bedrock output does not contain 'skills'"
+        ):
+            app._parse_skill_master_json(
+                '{"items":[{"skill_name":"分析","definition":"分析する能力"}]}',
+                stop_reason="end_turn",
+                usage={"input_tokens": 1, "output_tokens": 2},
+            )
+
+    def test_parse_skill_master_json_rejects_skills_dict(self):
+        import app
+
+        with self.assertRaisesRegex(
+            ValueError, "Bedrock output 'skills' must be an array"
+        ):
+            app._parse_skill_master_json(
+                '{"skills":{"skill_name":"分析","definition":"分析する能力"}}',
+                stop_reason="end_turn",
+                usage={"input_tokens": 1, "output_tokens": 2},
+            )
+
+    def test_parse_skill_master_json_rejects_skill_master_wrapper(self):
+        import app
+
+        with self.assertRaisesRegex(
+            ValueError, "Bedrock output does not contain 'skills'"
+        ):
+            app._parse_skill_master_json(
+                '{"skill_master":{"skills":[{"skill_name":"分析","definition":"分析する能力"}]}}',
+                stop_reason="end_turn",
+                usage={"input_tokens": 1, "output_tokens": 2},
+            )
+
+    def test_unexpected_structure_log_does_not_include_generated_answer_text(self):
+        import app
+
+        generated_text = '{"items":[{"secret":"FULL_GENERATED_ANSWER_TEXT"}]}'
+
+        with self.assertLogs(level="WARNING") as log_context:
+            with self.assertRaisesRegex(
+                ValueError, "Bedrock output does not contain 'skills'"
+            ):
+                app._parse_skill_master_json(
+                    generated_text,
+                    stop_reason="end_turn",
+                    usage={"input_tokens": 10, "output_tokens": 20},
+                )
+
+        log_output = "\n".join(log_context.output)
+        self.assertIn("Unexpected Bedrock output structure", log_output)
+        self.assertIn("top_level_type=dict", log_output)
+        self.assertIn("keys=['items']", log_output)
+        self.assertIn("skills_type=missing", log_output)
+        self.assertIn(f"generated_text_length={len(generated_text)}", log_output)
+        self.assertIn("stop_reason=end_turn", log_output)
+        self.assertIn("input_tokens=10", log_output)
+        self.assertIn("output_tokens=20", log_output)
+        self.assertNotIn("FULL_GENERATED_ANSWER_TEXT", log_output)
 
     def test_parse_skill_master_json_deduplicates_same_normalized_skill_name(self):
         import app

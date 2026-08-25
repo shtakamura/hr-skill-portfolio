@@ -239,7 +239,11 @@ def _invoke_bedrock(model_id: str, prompt: str) -> dict[str, Any]:
 
     generated_text = _extract_bedrock_text(payload)
     try:
-        skill_master = _parse_skill_master_json(generated_text)
+        skill_master = _parse_skill_master_json(
+            generated_text,
+            stop_reason=stop_reason,
+            usage=payload.get("usage"),
+        )
     except json.JSONDecodeError:
         _log_bedrock_json_parse_failure(generated_text, payload)
         raise
@@ -300,7 +304,9 @@ def _extract_bedrock_text(payload: dict[str, Any]) -> str:
     raise ValueError("Unable to extract text from Bedrock response")
 
 
-def _parse_skill_master_json(text: str) -> dict[str, Any]:
+def _parse_skill_master_json(
+    text: str, stop_reason: str = "", usage: Any = None
+) -> dict[str, Any]:
     """LLM出力JSONを検証・正規化する。
 
     - Markdownコードフェンス付きJSONにも対応
@@ -309,10 +315,15 @@ def _parse_skill_master_json(text: str) -> dict[str, Any]:
     - 正規化後のskill_nameが完全一致する項目のみ重複排除する
     """
     data = _extract_json_object(text)
-    skills = data.get("skills")
+    skills = data.get("skills") if isinstance(data, dict) else None
+
+    if not isinstance(data, dict) or "skills" not in data:
+        _log_unexpected_bedrock_output_structure(text, data, skills, stop_reason, usage)
+        raise ValueError("Bedrock output does not contain 'skills'")
 
     if not isinstance(skills, list):
-        raise ValueError("Bedrock output does not contain valid 'skills' array")
+        _log_unexpected_bedrock_output_structure(text, data, skills, stop_reason, usage)
+        raise ValueError("Bedrock output 'skills' must be an array")
 
     normalized_skills: list[dict[str, str]] = []
     seen_skill_names: set[str] = set()
@@ -342,14 +353,32 @@ def _parse_skill_master_json(text: str) -> dict[str, Any]:
     return {"skills": normalized_skills}
 
 
-def _extract_json_object(text: str) -> dict[str, Any]:
+def _log_unexpected_bedrock_output_structure(
+    text: str, data: Any, skills: Any, stop_reason: str, usage: Any
+) -> None:
+    """Bedrock出力の構造違反を、本文を含めず診断ログへ出力する。"""
+    usage_dict = usage if isinstance(usage, dict) else {}
+    logger.warning(
+        "Unexpected Bedrock output structure: top_level_type=%s keys=%s "
+        "skills_type=%s generated_text_length=%s stop_reason=%s "
+        "input_tokens=%s output_tokens=%s",
+        type(data).__name__,
+        list(data.keys()) if isinstance(data, dict) else [],
+        type(skills).__name__ if skills is not None else "missing",
+        len(text),
+        stop_reason,
+        usage_dict.get("input_tokens"),
+        usage_dict.get("output_tokens"),
+    )
+
+
+def _extract_json_object(text: str) -> Any:
     """生成テキストから最初に解析可能なJSONオブジェクトを取り出す。"""
     json_text = text.strip()
 
     try:
         data = json.loads(json_text)
-        if isinstance(data, dict):
-            return data
+        return data
     except json.JSONDecodeError:
         pass
 
@@ -357,8 +386,7 @@ def _extract_json_object(text: str) -> dict[str, Any]:
         fenced_text = match.group(1).strip()
         try:
             data = json.loads(fenced_text)
-            if isinstance(data, dict):
-                return data
+            return data
         except json.JSONDecodeError:
             continue
 
@@ -372,8 +400,7 @@ def _extract_json_object(text: str) -> dict[str, Any]:
         except json.JSONDecodeError as err:
             last_error = err
             continue
-        if isinstance(data, dict):
-            return data
+        return data
 
     if last_error is not None:
         raise last_error
