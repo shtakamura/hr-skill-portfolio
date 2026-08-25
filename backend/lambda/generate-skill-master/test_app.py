@@ -1,3 +1,4 @@
+import importlib.util
 import json
 import os
 import sys
@@ -6,6 +7,17 @@ import types
 import unittest
 from io import BytesIO
 from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SCRIPT_PATH = REPO_ROOT / "scripts" / "build_taxonomy_context.py"
+
+
+def _load_taxonomy_builder():
+    spec = importlib.util.spec_from_file_location("build_taxonomy_context", SCRIPT_PATH)
+    module = importlib.util.module_from_spec(spec)
+    assert spec.loader is not None
+    spec.loader.exec_module(module)
+    return module
 
 
 class GenerateSkillMasterTest(unittest.TestCase):
@@ -27,6 +39,62 @@ class GenerateSkillMasterTest(unittest.TestCase):
             ensure_ascii=False,
         )
 
+    def test_build_taxonomy_context_converts_categories_and_subcategories(self):
+        builder = _load_taxonomy_builder()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_path = Path(temp_dir) / "lightcast_skill_subcategories.csv"
+            output_path = Path(temp_dir) / "taxonomy_context.md"
+            source_path.write_text(
+                "category,subcategory\n"
+                "Analysis,Data Analysis\n"
+                "Analysis,Data Visualization\n"
+                "Business,Project Management\n",
+                encoding="utf-8",
+            )
+
+            category_count, subcategory_count = builder.build_taxonomy_context(
+                source_path, output_path
+            )
+
+            self.assertEqual(category_count, 2)
+            self.assertEqual(subcategory_count, 3)
+            content = output_path.read_text(encoding="utf-8")
+            self.assertIn("# Lightcast Skill Taxonomy", content)
+            self.assertIn("## Analysis", content)
+            self.assertIn("- Data Analysis", content)
+            self.assertIn("- Data Visualization", content)
+            self.assertIn("## Business", content)
+            self.assertIn("- Project Management", content)
+
+    def test_build_taxonomy_context_skips_empty_and_duplicate_rows(self):
+        builder = _load_taxonomy_builder()
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source_path = Path(temp_dir) / "lightcast_skill_subcategories.csv"
+            output_path = Path(temp_dir) / "taxonomy_context.md"
+            source_path.write_bytes(
+                (
+                    "\ufeffcategory,subcategory\n"
+                    "Analysis,Data Analysis\n"
+                    "Analysis,Data Analysis\n"
+                    "Analysis,\n"
+                    ",Project Management\n"
+                    "Business, Project Management \n"
+                ).encode("utf-8")
+            )
+
+            category_count, subcategory_count = builder.build_taxonomy_context(
+                source_path, output_path
+            )
+
+            self.assertEqual(category_count, 2)
+            self.assertEqual(subcategory_count, 2)
+            content = output_path.read_text(encoding="utf-8")
+            self.assertEqual(content.count("- Data Analysis"), 1)
+            self.assertEqual(content.count("- Project Management"), 1)
+            self.assertNotIn("�", content)
+
     def test_load_rules_reads_japanese_rules_without_mojibake(self):
         import app
 
@@ -37,26 +105,34 @@ class GenerateSkillMasterTest(unittest.TestCase):
         self.assertIn("日本語", rules)
         self.assertNotIn("�", rules)
 
-    def test_rules_include_skill_name_array_contract(self):
+    def test_load_taxonomy_context_reads_generated_context(self):
         import app
 
-        rules = app._load_rules()
+        taxonomy_context = app._load_taxonomy_context()
 
-        self.assertIn("トップレベル項目はskillsだけ", rules)
-        self.assertIn("skillsは必ずJSON配列", rules)
-        self.assertIn("skill_masterやresultなどのラッパー", rules)
-        self.assertIn("スキルが1件の場合もskills配列", rules)
-        self.assertNotIn("definition", rules)
+        self.assertIn("# Lightcast Skill Taxonomy", taxonomy_context)
+        self.assertIn("## Analysis", taxonomy_context)
+        self.assertIn("- Data Analysis", taxonomy_context)
+        self.assertNotIn("�", taxonomy_context)
 
-        json_start = rules.find("{")
-        json_end = rules.rfind("}")
-        self.assertNotEqual(json_start, -1)
-        self.assertNotEqual(json_end, -1)
-        output_example = json.loads(rules[json_start : json_end + 1])
-        self.assertEqual(list(output_example.keys()), ["skills"])
-        self.assertIsInstance(output_example["skills"], list)
-        self.assertGreaterEqual(len(output_example["skills"]), 1)
-        self.assertIsInstance(output_example["skills"][0], str)
+    def test_load_taxonomy_context_rejects_missing_file(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaisesRegex(
+                ValueError, "Unable to read taxonomy_context.md"
+            ):
+                app._load_taxonomy_context(Path(temp_dir) / "missing.md")
+
+    def test_load_taxonomy_context_rejects_empty_file(self):
+        import app
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            taxonomy_path = Path(temp_dir) / "taxonomy_context.md"
+            taxonomy_path.write_text("  \n", encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "taxonomy_context.md is empty"):
+                app._load_taxonomy_context(taxonomy_path)
 
     def test_load_rules_reads_utf8_bom_file(self):
         import app
@@ -84,18 +160,44 @@ class GenerateSkillMasterTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 app._load_rules(rules_path)
 
-    def test_prompt_template_accepts_rules_and_records_placeholders(self):
-        from app import PROMPT_TEMPLATE
+    def test_build_bedrock_content_splits_cached_fixed_context_and_dynamic_records(
+        self,
+    ):
+        import app
 
-        prompt = PROMPT_TEMPLATE.format(
-            rules="有効なJSONのみを返す",
-            records='{"duties": [], "required_skills": []}',
+        content = app._build_bedrock_content(
+            "RULES_TEXT",
+            "# Lightcast Skill Taxonomy\n\n## Analysis\n\n- Data Analysis",
+            {"duties": ["分析"], "required_skills": ["統計"]},
         )
 
-        self.assertIn("有効なJSON", prompt)
-        self.assertIn('{"duties": [], "required_skills": []}', prompt)
-        self.assertIn("スキル名一覧", prompt)
-        self.assertNotIn("definition", prompt)
+        self.assertEqual(len(content), 2)
+        fixed_block = content[0]
+        dynamic_block = content[1]
+        self.assertEqual(fixed_block["type"], "text")
+        self.assertEqual(fixed_block["cache_control"], {"type": "ephemeral"})
+        self.assertIn("RULES_TEXT", fixed_block["text"])
+        self.assertIn("# Lightcast Skill Taxonomy", fixed_block["text"])
+        self.assertEqual(dynamic_block["type"], "text")
+        self.assertNotIn("cache_control", dynamic_block)
+        self.assertIn('"duties": ["分析"]', dynamic_block["text"])
+        self.assertNotIn("RULES_TEXT", dynamic_block["text"])
+        self.assertNotIn("Lightcast Skill Taxonomy", dynamic_block["text"])
+
+    def test_real_rules_provide_lightcast_policy_and_output_contract(self):
+        import app
+
+        content = app._build_bedrock_content(
+            app._load_rules(),
+            "# Lightcast Skill Taxonomy\n\n## Analysis\n\n- Data Analysis",
+            {"duties": ["分析"], "required_skills": ["統計"]},
+        )
+        fixed_text = content[0]["text"]
+
+        self.assertIn("Lightcast Skill Taxonomyを、スキル名称の標準化", fixed_text)
+        self.assertIn("自然な日本語のスキル名", fixed_text)
+        self.assertIn("スキル名だけをJSONで返す", fixed_text)
+        self.assertIn("definitionは生成しない", fixed_text)
 
     def test_parse_skill_master_json_accepts_one_skill_name(self):
         import app
@@ -261,7 +363,7 @@ class GenerateSkillMasterTest(unittest.TestCase):
         self.assertIn("output_tokens=20", log_output)
         self.assertNotIn("FULL_GENERATED_ANSWER_TEXT", log_output)
 
-    def test_invoke_bedrock_uses_anthropic_request_and_response_metadata(self):
+    def test_invoke_bedrock_uses_anthropic_request_and_prompt_cache_content(self):
         import app
 
         captured_request = {}
@@ -275,7 +377,12 @@ class GenerateSkillMasterTest(unittest.TestCase):
                         json.dumps(
                             {
                                 "content": [{"type": "text", "text": generated_text}],
-                                "usage": {"input_tokens": 12, "output_tokens": 8},
+                                "usage": {
+                                    "input_tokens": 12,
+                                    "output_tokens": 8,
+                                    "cache_creation_input_tokens": 100,
+                                    "cache_read_input_tokens": 200,
+                                },
                                 "stop_reason": "end_turn",
                             },
                             ensure_ascii=False,
@@ -283,10 +390,15 @@ class GenerateSkillMasterTest(unittest.TestCase):
                     )
                 }
 
+        content = app._build_bedrock_content(
+            "RULES_TEXT",
+            "# Lightcast Skill Taxonomy\n\n## Analysis\n\n- Data Analysis",
+            {"duties": ["分析"], "required_skills": ["統計"]},
+        )
         app.boto3.client = lambda service_name: BedrockRuntimeClient()
 
         skill_master = app._invoke_bedrock(
-            "jp.anthropic.claude-sonnet-4-5-20250929-v1:0", "prompt text"
+            "jp.anthropic.claude-sonnet-4-5-20250929-v1:0", content
         )
 
         self.assertEqual(
@@ -300,13 +412,21 @@ class GenerateSkillMasterTest(unittest.TestCase):
         self.assertNotIn("tools", request_body)
         self.assertEqual(request_body["anthropic_version"], "bedrock-2023-05-31")
         self.assertEqual(request_body["max_tokens"], 3000)
-        self.assertEqual(
-            request_body["messages"], [{"role": "user", "content": "prompt text"}]
-        )
+        request_content = request_body["messages"][0]["content"]
+        self.assertEqual(request_content[0]["cache_control"], {"type": "ephemeral"})
+        self.assertNotIn("cache_control", request_content[1])
+        self.assertIn("RULES_TEXT", request_content[0]["text"])
+        self.assertIn('"duties": ["分析"]', request_content[1]["text"])
         self.assertEqual(skill_master["skills"], ["スキル0"])
         self.assertEqual(
             skill_master["usage"],
-            {"inputTokens": 12, "outputTokens": 8, "totalTokens": 20},
+            {
+                "inputTokens": 12,
+                "outputTokens": 8,
+                "totalTokens": 20,
+                "cacheCreationInputTokens": 100,
+                "cacheReadInputTokens": 200,
+            },
         )
         self.assertEqual(skill_master["stopReason"], "end_turn")
 
@@ -342,18 +462,36 @@ class GenerateSkillMasterTest(unittest.TestCase):
             "\n".join(log_context.output),
         )
 
-    def test_extract_bedrock_usage_defaults_invalid_values_to_zero(self):
+    def test_extract_bedrock_usage_defaults_invalid_cache_values_to_zero(self):
         import app
 
         self.assertEqual(
             app._extract_bedrock_usage(
-                {"usage": {"input_tokens": "x", "output_tokens": -1}}
+                {
+                    "usage": {
+                        "input_tokens": "x",
+                        "output_tokens": -1,
+                        "cache_creation_input_tokens": True,
+                    }
+                }
             ),
-            {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0},
+            {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0,
+                "cacheCreationInputTokens": 0,
+                "cacheReadInputTokens": 0,
+            },
         )
         self.assertEqual(
             app._extract_bedrock_usage({}),
-            {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0},
+            {
+                "inputTokens": 0,
+                "outputTokens": 0,
+                "totalTokens": 0,
+                "cacheCreationInputTokens": 0,
+                "cacheReadInputTokens": 0,
+            },
         )
 
     def test_handler_response_includes_usage_and_stop_reason_without_saving_them(self):
@@ -383,7 +521,12 @@ class GenerateSkillMasterTest(unittest.TestCase):
                                         "text": '{"skills":["データ分析"]}',
                                     }
                                 ],
-                                "usage": {"input_tokens": 3, "output_tokens": 4},
+                                "usage": {
+                                    "input_tokens": 3,
+                                    "output_tokens": 4,
+                                    "cache_creation_input_tokens": 5,
+                                    "cache_read_input_tokens": 6,
+                                },
                                 "stop_reason": "end_turn",
                             },
                             ensure_ascii=False,
@@ -428,25 +571,34 @@ class GenerateSkillMasterTest(unittest.TestCase):
 
         self.assertEqual(response["statusCode"], 200)
         self.assertEqual(
-            body["usage"], {"inputTokens": 3, "outputTokens": 4, "totalTokens": 7}
+            body["usage"],
+            {
+                "inputTokens": 3,
+                "outputTokens": 4,
+                "totalTokens": 7,
+                "cacheCreationInputTokens": 5,
+                "cacheReadInputTokens": 6,
+            },
         )
         self.assertEqual(body["stopReason"], "end_turn")
         self.assertEqual(body["saved_count"], 1)
         self.assertEqual(len(saved_items), 1)
         self.assertEqual(saved_items[0]["skillName"], "データ分析")
-        self.assertEqual(saved_items[0]["definition"], "")
+        self.assertNotIn("definition", saved_items[0])
         self.assertNotIn("usage", saved_items[0])
         self.assertNotIn("stopReason", saved_items[0])
         self.assertIn(
-            "Bedrock usage: inputTokens=3 outputTokens=4 totalTokens=7 stopReason=end_turn",
+            "Bedrock usage: input_tokens=3 output_tokens=4 total_tokens=7 cache_creation_input_tokens=5 cache_read_input_tokens=6 stop_reason=end_turn saved_count=1",
             "\n".join(log_context.output),
         )
 
         request_body = json.loads(captured_request["body"])
-        prompt = request_body["messages"][0]["content"]
-        self.assertIn("有効なJSON", prompt)
-        self.assertIn('"skills"', prompt)
-        self.assertNotIn("definition", prompt)
+        request_content = request_body["messages"][0]["content"]
+        self.assertIn("有効なJSON", request_content[0]["text"])
+        self.assertIn("Lightcast Skill Taxonomy", request_content[0]["text"])
+        self.assertIn('"skills"', request_content[0]["text"])
+        self.assertIn('"duties": ["分析"]', request_content[1]["text"])
+        self.assertNotIn("definition", request_content[1]["text"])
 
 
 if __name__ == "__main__":
