@@ -125,3 +125,95 @@ Infrastructure
 CI/CD
 
 - GitHub Actions
+
+## GitHub Actions + AWS OIDC Configuration
+
+### 概要
+
+GitHub Actions から AWS へセキュアにデプロイするため、AWS Identity and Access Management (IAM) の OIDC フェデレーション機能を使用しています。
+
+これにより、AWS アクセスキーを GitHub Secrets に保存することなく、一時的な認証情報を使用して CDK デプロイを実行できます。
+
+### アーキテクチャ
+
+```
+GitHub Actions
+    ↓
+GitHub OIDC Token
+    ↓
+AWS OIDC Provider
+    ↓
+AWS IAM Role
+    ↓
+CDK Deploy (CloudFormation)
+```
+
+### コンポーネント
+
+**1. GitHub OIDC Provider**
+- URL: `https://token.actions.githubusercontent.com`
+- Audience: `sts.amazonaws.com`
+- GitHub Actions が発行するトークンを信頼できる認証局として登録
+
+**2. GitHub Actions デプロイロール**
+- ロール名: `HrSkillPortfolioGitHubActionsDeployRole`
+- 信頼関係: GitHub OIDC Provider のトークンを信頼
+- サブジェクト制限: `repo:shtakamura/hr-skill-portfolio:ref:refs/heads/main`
+  - このリポジトリの main ブランチからのデプロイのみを許可
+
+**3. IAM ポリシー（最小権限）**
+- CloudFormation スタック管理
+- Lambda 関数・実行ロール管理
+- DynamoDB テーブル管理
+- S3 バケット管理
+- Lambda Layer 管理
+- CDK Bootstrap ロール権限
+
+AdministratorAccess は付与していません。
+
+### GitHub Actions ワークフロー
+
+**deploy-backend.yml**
+- トリガー: `main` ブランチへのプッシュ
+- パーミッション: `contents: read`, `id-token: write`
+- AWS 認証: `aws-actions/configure-aws-credentials@v4` (OIDC)
+- 動作: CDK デプロイ (`HrSkillPortfolioStack`)
+
+**validate.yml**
+- トリガー: Pull Request
+- パーミッション: `contents: read` のみ（AWS デプロイなし）
+- 動作:
+  - フロントエンド ビルド
+  - CDK ビルド・synth
+  - バックエンド Python テスト
+
+### セキュリティ機能
+
+- ✅ OIDC トークンベース認証（一時認証情報）
+- ✅ AWS アクセスキー不使用
+- ✅ GitHub Secrets に長期アクセスキー非保存
+- ✅ サブジェクト制限（main ブランチのみ）
+- ✅ 最小権限ポリシー（AdministratorAccess 非使用）
+- ✅ PR では AWS デプロイ実行なし
+
+### デプロイ手順
+
+1. **AWS アカウント ID を GitHub Secret に設定**（実装は別途実施）
+   - Secret 名: `AWS_ACCOUNT_ID`
+
+2. **CDK デプロイ**
+   ```bash
+   cd infra/cdk
+   npm run build
+   npx cdk deploy GitHubActionsOidcStack --require-approval never
+   npx cdk deploy HrSkillPortfolioStack --require-approval never
+   ```
+
+3. **GitHub へプッシュ**
+   ```bash
+   git push origin main
+   ```
+
+4. **GitHub Actions ワークフロー実行**
+   - `deploy-backend.yml` が自動実行
+   - OIDC トークンを使用して AWS にデプロイ

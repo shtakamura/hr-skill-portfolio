@@ -14,7 +14,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
 lib64/
 parts/
 sdist/
@@ -216,3 +215,15 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+current-template.yaml
+infra/cdk/current-template.yaml
+
+# CDK temporary synth outputs
+infra/cdk/synth-output.json
+infra/cdk/synth-output.txt
+infra/cdk/synth-result.txt
