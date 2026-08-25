@@ -45,6 +45,20 @@ React Frontend
 
 - 10〜20個
 
+実装
+
+- Lambda: `generate-skill-master` (Python)
+- 実装配置: `backend/lambda/generate-skill-master`
+- 入力: S3にアップロードされたExcel (`SF_ポジション定義` シート)
+- 処理: A〜F列を集約し、Bedrock Claudeで共通スキルマスタを生成
+- 保存先: DynamoDB `SkillMaster`
+
+環境変数
+
+- `BEDROCK_MODEL_ID`
+- `S3_BUCKET_NAME`
+- `SKILL_MASTER_TABLE_NAME`
+
 ## Skill Level Definition
 
 5：会社レベルで高度に活用し、全社展開・標準化を推進できる
