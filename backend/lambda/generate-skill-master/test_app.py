@@ -198,6 +198,14 @@ class GenerateSkillMasterTest(unittest.TestCase):
         self.assertIn("自然な日本語のスキル名", fixed_text)
         self.assertIn("スキル名だけをJSONで返す", fixed_text)
         self.assertIn("definitionは生成しない", fixed_text)
+        self.assertIn("制度名、規格名、手法名、組織機能名、成果名、KPI名", fixed_text)
+        self.assertIn("能力・専門性を抽出する", fixed_text)
+        self.assertIn("評価対象となる能力を表現する", fixed_text)
+        self.assertIn("過度に抽象化", fixed_text)
+        self.assertIn("近接するサブカテゴリ", fixed_text)
+        self.assertIn("接尾語が違うだけ", fixed_text)
+        self.assertIn("BCP対応 -> 事業継続管理", fixed_text)
+        self.assertIn("PMO -> プロジェクト統制", fixed_text)
 
     def test_parse_skill_master_json_accepts_one_skill_name(self):
         import app
