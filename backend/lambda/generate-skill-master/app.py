@@ -24,7 +24,7 @@ RULES_PATH = Path(__file__).resolve().parent / "rules.md"
 PROMPT_TEMPLATE = """あなたは職務分析およびスキル体系設計の専門家です。
 
 以下の主な職務および必要知識・スキルを分析し、
-企業共通で利用可能なスキルマスタを作成してください。
+企業共通で利用可能なスキル名一覧を作成してください。
 
 【スキル生成ルール】
 {rules}
@@ -32,7 +32,7 @@ PROMPT_TEMPLATE = """あなたは職務分析およびスキル体系設計の�
 以下が分析対象データです:
 {records}
 
-上記データからスキルマスタを生成してください。
+上記データからスキル名一覧を生成してください。
 """
 
 
@@ -218,7 +218,7 @@ def _invoke_bedrock(model_id: str, prompt: str) -> dict[str, Any]:
 
     request_body = {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 10000,
+        "max_tokens": 3000,
         "messages": [{"role": "user", "content": prompt}],
     }
 
@@ -236,6 +236,7 @@ def _invoke_bedrock(model_id: str, prompt: str) -> dict[str, Any]:
         logger.warning(
             "Bedrock output may have been truncated because max_tokens was reached"
         )
+        raise ValueError("Bedrock output was truncated because max_tokens was reached")
 
     generated_text = _extract_bedrock_text(payload)
     try:
@@ -312,7 +313,7 @@ def _parse_skill_master_json(
     - Markdownコードフェンス付きJSONにも対応
     - skills配列の形式を検証
     - 0件のみエラーとする
-    - 正規化後のskill_nameが完全一致する項目のみ重複排除する
+    - 正規化後のスキル名が完全一致する項目のみ重複排除する
     """
     data = _extract_json_object(text)
     skills = data.get("skills") if isinstance(data, dict) else None
@@ -325,21 +326,20 @@ def _parse_skill_master_json(
         _log_unexpected_bedrock_output_structure(text, data, skills, stop_reason, usage)
         raise ValueError("Bedrock output 'skills' must be an array")
 
-    normalized_skills: list[dict[str, str]] = []
+    normalized_skills: list[str] = []
     seen_skill_names: set[str] = set()
     duplicate_count = 0
     for item in skills:
-        if not isinstance(item, dict):
-            continue
-        skill_name = _normalize_skill_name(item.get("skill_name"))
-        definition = _normalize_cell(item.get("definition"))
-        if not skill_name or not definition:
+        if not isinstance(item, str):
+            raise ValueError("Bedrock output 'skills' entries must be strings")
+        skill_name = _normalize_skill_name(item)
+        if not skill_name:
             continue
         if skill_name in seen_skill_names:
             duplicate_count += 1
             continue
         seen_skill_names.add(skill_name)
-        normalized_skills.append({"skill_name": skill_name, "definition": definition})
+        normalized_skills.append(skill_name)
 
     skill_count = len(normalized_skills)
     if skill_count == 0:
@@ -436,15 +436,14 @@ def _save_skill_master(
 
     with table.batch_writer() as batch:
         for skill in skill_master["skills"]:
-            skill_name = skill["skill_name"]
-            definition = skill["definition"]
+            skill_name = skill
             skill_id = str(uuid.uuid5(uuid.NAMESPACE_URL, skill_name))
 
             batch.put_item(
                 Item={
                     "skillId": skill_id,
                     "skillName": skill_name,
-                    "definition": definition,
+                    "definition": "",
                     "updatedAt": now,
                     "sourceBucket": source_bucket,
                     "sourceKey": source_key,
