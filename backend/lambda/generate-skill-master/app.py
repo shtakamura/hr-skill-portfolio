@@ -3,9 +3,11 @@ import json
 import logging
 import os
 import re
+import unicodedata
 import uuid
 from datetime import datetime, timezone
 from io import StringIO
+from pathlib import Path
 from typing import Any
 from urllib.parse import unquote_plus
 
@@ -17,69 +19,35 @@ logger.setLevel(logging.INFO)
 
 # このLambdaは、CSVの職務情報を集約してBedrockで共通スキルマスタを生成し、
 # DynamoDBへ保存する責務を持つ。
+RULES_PATH = Path(__file__).resolve().parent / "rules.md"
+
 PROMPT_TEMPLATE = """あなたは職務分析およびスキル体系設計の専門家です。
 
 以下の主な職務および必要知識・スキルを分析し、
 企業共通で利用可能なスキルマスタを作成してください。
 
-【目的】
-
-人材ポートフォリオおよび職務類似度分析で利用できる共通スキル体系を作成する。
-
-【ルール】
-
-- ポジション名や部署名は考慮しない
-- タスク名をそのままスキル名にしない
-- 職務の背後にある能力を抽出する
-- 同義語や類似概念は統合する
-- 特定システム名や製品名は汎化する
-- 将来的に全社員を同じ軸で比較できる粒度とする
-- スキル数は10〜20個とする
-- スキル同士が重複しないこと（MECEを意識）
-- 個別業務ではなく再利用可能な能力として定義すること
-
-【期待する粒度】
-
-良い例
-- 戦略立案
-- 業務企画
-- プロジェクト管理
-- データ分析
-- 業務改善
-- 品質管理
-- 生産管理
-- コミュニケーション
-- リーダーシップ
-
-悪い例
-- 会議資料作成
-- 週次レポート作成
-- Excel集計
-- SAP入力
-
-【出力上の厳守事項】
-
-- 有効なJSONオブジェクトのみを出力する
-- JSONの前後に説明文、見出し、注釈を付けない
-- Markdownのコードフェンスを付けない
-- 途中で省略しない
-- skill_nameとdefinitionは必ず文字列とする
-- skills以外のトップレベル項目は出力しない
-
-【出力形式】
-
-{{
-  "skills": [
-        {{
-      "skill_name": "",
-      "definition": ""
-        }}
-  ]
-}}
+【スキル生成ルール】
+{rules}
 
 以下が分析対象データです:
 {records}
+
+上記データからスキルマスタを生成してください。
 """
+
+
+def _load_rules(path: Path = RULES_PATH) -> str:
+    """rules.mdを読み込み、空または読み込み不可の場合はValueErrorにする。"""
+    try:
+        rules = path.read_text(encoding="utf-8-sig")
+    except OSError as err:
+        raise ValueError("Unable to read rules.md") from err
+
+    rules = rules.strip()
+    if not rules:
+        raise ValueError("rules.md is empty")
+
+    return rules
 
 
 def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
@@ -110,7 +78,10 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
             logger.warning("No data found in target columns")
             return _error_response(400, "No valid rows found in CSV target columns")
 
-        prompt = PROMPT_TEMPLATE.format(records=json.dumps(records, ensure_ascii=False))
+        rules = _load_rules()
+        prompt = PROMPT_TEMPLATE.format(
+            rules=rules, records=json.dumps(records, ensure_ascii=False)
+        )
         skill_master = _invoke_bedrock(model_id, prompt)
         saved_count = _save_skill_master(
             table_name, source_bucket, source_key, skill_master
@@ -124,6 +95,8 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
                     "message": "Skill master generated and saved successfully",
                     "saved_count": saved_count,
                     "source": {"bucket": source_bucket, "key": source_key},
+                    "usage": skill_master["usage"],
+                    "stopReason": skill_master["stopReason"],
                 },
                 ensure_ascii=False,
             ),
@@ -233,6 +206,11 @@ def _normalize_cell(value: Any) -> str:
     return re.sub(r"\s+", " ", text)
 
 
+def _normalize_skill_name(value: Any) -> str:
+    """重複判定用にスキル名をUnicode正規化し、空白を正規化する。"""
+    return unicodedata.normalize("NFKC", _normalize_cell(value))
+
+
 def _invoke_bedrock(model_id: str, prompt: str) -> dict[str, Any]:
     """Bedrock Runtimeを呼び出して生成結果をJSONとして返す。"""
     logger.info("Invoking Bedrock model: %s", model_id)
@@ -252,12 +230,55 @@ def _invoke_bedrock(model_id: str, prompt: str) -> dict[str, Any]:
     )
 
     payload = json.loads(response["body"].read())
+    usage = _extract_bedrock_usage(payload)
+    stop_reason = _extract_bedrock_stop_reason(payload)
+    if stop_reason == "max_tokens":
+        logger.warning(
+            "Bedrock output may have been truncated because max_tokens was reached"
+        )
+
     generated_text = _extract_bedrock_text(payload)
     try:
-        return _parse_skill_master_json(generated_text)
+        skill_master = _parse_skill_master_json(generated_text)
     except json.JSONDecodeError:
         _log_bedrock_json_parse_failure(generated_text, payload)
         raise
+
+    skill_master["usage"] = usage
+    skill_master["stopReason"] = stop_reason
+    return skill_master
+
+
+def _extract_bedrock_usage(payload: dict[str, Any]) -> dict[str, int]:
+    """BedrockレスポンスのusageをLambdaレスポンス形式へ正規化する。"""
+    usage = payload.get("usage")
+    if not isinstance(usage, dict):
+        return {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0}
+
+    input_tokens = _safe_token_count(usage.get("input_tokens"))
+    output_tokens = _safe_token_count(usage.get("output_tokens"))
+    return {
+        "inputTokens": input_tokens,
+        "outputTokens": output_tokens,
+        "totalTokens": input_tokens + output_tokens,
+    }
+
+
+def _safe_token_count(value: Any) -> int:
+    """不正なトークン数を安全に0へ丸める。"""
+    if isinstance(value, bool):
+        return 0
+    if isinstance(value, int) and value >= 0:
+        return value
+    return 0
+
+
+def _extract_bedrock_stop_reason(payload: dict[str, Any]) -> str:
+    """Bedrockレスポンスのstop_reasonを取得する。"""
+    stop_reason = payload.get("stop_reason")
+    if isinstance(stop_reason, str):
+        return stop_reason
+    return ""
 
 
 def _extract_bedrock_text(payload: dict[str, Any]) -> str:
@@ -284,7 +305,8 @@ def _parse_skill_master_json(text: str) -> dict[str, Any]:
 
     - Markdownコードフェンス付きJSONにも対応
     - skills配列の形式を検証
-    - 0件のみエラーとし、10〜20件の範囲外はwarningを出す
+    - 0件のみエラーとする
+    - 正規化後のskill_nameが完全一致する項目のみ重複排除する
     """
     data = _extract_json_object(text)
     skills = data.get("skills")
@@ -293,24 +315,28 @@ def _parse_skill_master_json(text: str) -> dict[str, Any]:
         raise ValueError("Bedrock output does not contain valid 'skills' array")
 
     normalized_skills: list[dict[str, str]] = []
+    seen_skill_names: set[str] = set()
+    duplicate_count = 0
     for item in skills:
         if not isinstance(item, dict):
             continue
-        skill_name = _normalize_cell(item.get("skill_name"))
+        skill_name = _normalize_skill_name(item.get("skill_name"))
         definition = _normalize_cell(item.get("definition"))
-        if skill_name and definition:
-            normalized_skills.append(
-                {"skill_name": skill_name, "definition": definition}
-            )
+        if not skill_name or not definition:
+            continue
+        if skill_name in seen_skill_names:
+            duplicate_count += 1
+            continue
+        seen_skill_names.add(skill_name)
+        normalized_skills.append({"skill_name": skill_name, "definition": definition})
 
     skill_count = len(normalized_skills)
     if skill_count == 0:
         raise ValueError("Generated skills count must be at least 1")
 
-    if not (10 <= skill_count <= 20):
-        logger.warning(
-            "Generated skills count is outside recommended range (10-20): %s",
-            skill_count,
+    if duplicate_count:
+        logger.info(
+            "Excluded duplicate skills by normalized skill_name: %s", duplicate_count
         )
 
     return {"skills": normalized_skills}
