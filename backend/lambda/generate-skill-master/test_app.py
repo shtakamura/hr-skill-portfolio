@@ -295,7 +295,7 @@ class GenerateSkillMasterTest(unittest.TestCase):
         self.assertNotIn("input", request_body)
         self.assertNotIn("tools", request_body)
         self.assertEqual(request_body["anthropic_version"], "bedrock-2023-05-31")
-        self.assertEqual(request_body["max_tokens"], 1500)
+        self.assertEqual(request_body["max_tokens"], 5000)
         self.assertEqual(
             request_body["messages"], [{"role": "user", "content": "prompt text"}]
         )
