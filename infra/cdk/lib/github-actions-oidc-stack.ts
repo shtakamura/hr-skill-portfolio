@@ -29,7 +29,7 @@ export class GitHubActionsOidcStack extends cdk.Stack {
       assumedBy: new iam.OpenIdConnectPrincipal(provider).withConditions({
         StringEquals: {
           "token.actions.githubusercontent.com:aud": "sts.amazonaws.com",
-          "token.actions.githubusercontent.com:sub": "repo:shtakamura/hr-skill-portfolio:ref:refs/heads/main"
+          "token.actions.githubusercontent.com:sub": "repo:shtakamura@294681980/hr-skill-portfolio@1344740129:ref:refs/heads/main"
         }
       }),
       description: "Role for GitHub Actions to deploy HR Skill Portfolio CDK stack"
