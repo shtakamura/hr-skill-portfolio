@@ -41,17 +41,32 @@ class GenerateSkillMasterTest(unittest.TestCase):
         rules = app._load_rules()
 
         self.assertIn("スキル件数に上限を設けない", rules)
-        self.assertIn("有効なJSONだけを返す", rules)
+        self.assertIn("有効なJSON", rules)
+        self.assertIn("日本語", rules)
+        self.assertNotIn("�", rules)
 
     def test_rules_include_top_level_skills_array_contract(self):
         import app
 
         rules = app._load_rules()
 
-        self.assertIn("トップレベル項目はskillsだけとする", rules)
-        self.assertIn("skillsは必ずJSON配列とする", rules)
-        self.assertIn("skill_masterなどのラッパーオブジェクトを追加しない", rules)
-        self.assertIn("スキルが1件の場合でもskillsは配列とする", rules)
+        self.assertIn("トップレベル項目はskillsのみ", rules)
+        self.assertIn("skillsは必ず配列", rules)
+        self.assertIn("skill_nameやdefinitionをトップレベルへ出力してはならない", rules)
+
+        json_start = rules.find("{")
+        json_end = rules.rfind("}")
+        if json_start != -1 and json_end != -1 and json_start < json_end:
+            output_example = json.loads(rules[json_start : json_end + 1])
+            self.assertEqual(list(output_example.keys()), ["skills"])
+            self.assertIsInstance(output_example["skills"], list)
+            self.assertGreaterEqual(len(output_example["skills"]), 1)
+            self.assertIn("skill_name", output_example["skills"][0])
+            self.assertIn("definition", output_example["skills"][0])
+        else:
+            self.assertIn('"skills"', rules)
+            self.assertIn('"skill_name"', rules)
+            self.assertIn('"definition"', rules)
 
     def test_load_rules_reads_utf8_bom_file(self):
         import app
@@ -83,11 +98,11 @@ class GenerateSkillMasterTest(unittest.TestCase):
         from app import PROMPT_TEMPLATE
 
         prompt = PROMPT_TEMPLATE.format(
-            rules="有効なJSONだけを返す",
+            rules="有効なJSONのみを返す",
             records='{"duties": [], "required_skills": []}',
         )
 
-        self.assertIn("有効なJSONだけを返す", prompt)
+        self.assertIn("有効なJSON", prompt)
         self.assertIn('{"duties": [], "required_skills": []}', prompt)
 
     def test_parse_skill_master_json_accepts_one_skill(self):
@@ -409,7 +424,12 @@ class GenerateSkillMasterTest(unittest.TestCase):
         self.assertNotIn("usage", saved_items[0])
         self.assertNotIn("stopReason", saved_items[0])
         self.assertIn("日本語", app._load_rules())
-        self.assertIn("有効なJSONだけを返す", captured_request["body"])
+        request_body = json.loads(captured_request["body"])
+        prompt = request_body["messages"][0]["content"]
+        self.assertIn("有効なJSON", prompt)
+        self.assertIn('"skills"', prompt)
+        self.assertIn('"skill_name"', prompt)
+        self.assertIn('"definition"', prompt)
 
 
 if __name__ == "__main__":
