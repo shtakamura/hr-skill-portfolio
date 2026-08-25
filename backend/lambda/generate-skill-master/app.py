@@ -218,7 +218,7 @@ def _invoke_bedrock(model_id: str, prompt: str) -> dict[str, Any]:
 
     request_body = {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 5000,
+        "max_tokens": 10000,
         "messages": [{"role": "user", "content": prompt}],
     }
 
