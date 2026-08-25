@@ -20,16 +20,20 @@ logger.setLevel(logging.INFO)
 # このLambdaは、CSVの職務情報を集約してBedrockで共通スキルマスタを生成し、
 # DynamoDBへ保存する責務を持つ。
 RULES_PATH = Path(__file__).resolve().parent / "rules.md"
+TAXONOMY_CONTEXT_PATH = Path(__file__).resolve().parent / "taxonomy_context.md"
 
-PROMPT_TEMPLATE = """あなたは職務分析およびスキル体系設計の専門家です。
+FIXED_CONTEXT_TEMPLATE = """あなたは職務分析およびスキル体系設計の専門家です。
 
-以下の主な職務および必要知識・スキルを分析し、
-企業共通で利用可能なスキル名一覧を作成してください。
+以下の固定コンテキストに従い、企業共通で利用可能なスキル名一覧を作成します。
 
 【スキル生成ルール】
 {rules}
 
-以下が分析対象データです:
+【Lightcast Skill Taxonomy】
+{taxonomy_context}
+"""
+
+DYNAMIC_RECORDS_TEMPLATE = """以下が今回の分析対象データです:
 {records}
 
 上記データからスキル名一覧を生成してください。
@@ -38,16 +42,47 @@ PROMPT_TEMPLATE = """あなたは職務分析およびスキル体系設計の�
 
 def _load_rules(path: Path = RULES_PATH) -> str:
     """rules.mdを読み込み、空または読み込み不可の場合はValueErrorにする。"""
+    return _load_text_file(path, "rules.md")
+
+
+def _load_taxonomy_context(path: Path = TAXONOMY_CONTEXT_PATH) -> str:
+    """taxonomy_context.mdを読み込み、空または読み込み不可の場合はValueErrorにする。"""
+    return _load_text_file(path, "taxonomy_context.md")
+
+
+def _load_text_file(path: Path, label: str) -> str:
+    """UTF-8 BOMを許容してテキストファイルを読み込む。"""
     try:
-        rules = path.read_text(encoding="utf-8-sig")
+        content = path.read_text(encoding="utf-8-sig")
     except OSError as err:
-        raise ValueError("Unable to read rules.md") from err
+        raise ValueError(f"Unable to read {label}") from err
 
-    rules = rules.strip()
-    if not rules:
-        raise ValueError("rules.md is empty")
+    content = content.strip()
+    if not content:
+        raise ValueError(f"{label} is empty")
 
-    return rules
+    return content
+
+
+def _build_bedrock_content(
+    rules: str, taxonomy_context: str, records: dict[str, list[str]]
+) -> list[dict[str, Any]]:
+    """固定コンテキストをPrompt Cache対象、分析対象データを非キャッシュ対象に分離する。"""
+    fixed_context = FIXED_CONTEXT_TEMPLATE.format(
+        rules=rules,
+        taxonomy_context=taxonomy_context,
+    )
+    dynamic_records = DYNAMIC_RECORDS_TEMPLATE.format(
+        records=json.dumps(records, ensure_ascii=False)
+    )
+    return [
+        {
+            "type": "text",
+            "text": fixed_context,
+            "cache_control": {"type": "ephemeral"},
+        },
+        {"type": "text", "text": dynamic_records},
+    ]
 
 
 def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
@@ -79,21 +114,23 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
             return _error_response(400, "No valid rows found in CSV target columns")
 
         rules = _load_rules()
-        prompt = PROMPT_TEMPLATE.format(
-            rules=rules, records=json.dumps(records, ensure_ascii=False)
-        )
-        skill_master = _invoke_bedrock(model_id, prompt)
+        taxonomy_context = _load_taxonomy_context()
+        content = _build_bedrock_content(rules, taxonomy_context, records)
+        skill_master = _invoke_bedrock(model_id, content)
         saved_count = _save_skill_master(
             table_name, source_bucket, source_key, skill_master
         )
 
         logger.info("Saved skill master items: %s", saved_count)
         logger.info(
-            "Bedrock usage: inputTokens=%s outputTokens=%s totalTokens=%s stopReason=%s",
+            "Bedrock usage: input_tokens=%s output_tokens=%s total_tokens=%s cache_creation_input_tokens=%s cache_read_input_tokens=%s stop_reason=%s saved_count=%s",
             skill_master["usage"]["inputTokens"],
             skill_master["usage"]["outputTokens"],
             skill_master["usage"]["totalTokens"],
+            skill_master["usage"]["cacheCreationInputTokens"],
+            skill_master["usage"]["cacheReadInputTokens"],
             skill_master["stopReason"],
+            saved_count,
         )
         return {
             "statusCode": 200,
@@ -218,7 +255,9 @@ def _normalize_skill_name(value: Any) -> str:
     return unicodedata.normalize("NFKC", _normalize_cell(value))
 
 
-def _invoke_bedrock(model_id: str, prompt: str) -> dict[str, Any]:
+def _invoke_bedrock(
+    model_id: str, content: str | list[dict[str, Any]]
+) -> dict[str, Any]:
     """Bedrock Runtimeを呼び出して生成結果をJSONとして返す。"""
     logger.info("Invoking Bedrock model: %s", model_id)
     bedrock = boto3.client("bedrock-runtime")
@@ -226,7 +265,7 @@ def _invoke_bedrock(model_id: str, prompt: str) -> dict[str, Any]:
     request_body = {
         "anthropic_version": "bedrock-2023-05-31",
         "max_tokens": 3000,
-        "messages": [{"role": "user", "content": prompt}],
+        "messages": [{"role": "user", "content": content}],
     }
 
     response = bedrock.invoke_model(
@@ -265,14 +304,26 @@ def _extract_bedrock_usage(payload: dict[str, Any]) -> dict[str, int]:
     """BedrockレスポンスのusageをLambdaレスポンス形式へ正規化する。"""
     usage = payload.get("usage")
     if not isinstance(usage, dict):
-        return {"inputTokens": 0, "outputTokens": 0, "totalTokens": 0}
+        return {
+            "inputTokens": 0,
+            "outputTokens": 0,
+            "totalTokens": 0,
+            "cacheCreationInputTokens": 0,
+            "cacheReadInputTokens": 0,
+        }
 
     input_tokens = _safe_token_count(usage.get("input_tokens"))
     output_tokens = _safe_token_count(usage.get("output_tokens"))
+    cache_creation_input_tokens = _safe_token_count(
+        usage.get("cache_creation_input_tokens")
+    )
+    cache_read_input_tokens = _safe_token_count(usage.get("cache_read_input_tokens"))
     return {
         "inputTokens": input_tokens,
         "outputTokens": output_tokens,
         "totalTokens": input_tokens + output_tokens,
+        "cacheCreationInputTokens": cache_creation_input_tokens,
+        "cacheReadInputTokens": cache_read_input_tokens,
     }
 
 
@@ -450,7 +501,6 @@ def _save_skill_master(
                 Item={
                     "skillId": skill_id,
                     "skillName": skill_name,
-                    "definition": "",
                     "updatedAt": now,
                     "sourceBucket": source_bucket,
                     "sourceKey": source_key,
