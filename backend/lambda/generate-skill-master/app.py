@@ -57,16 +57,25 @@ PROMPT_TEMPLATE = """あなたは職務分析およびスキル体系設計の�
 - Excel集計
 - SAP入力
 
+【出力上の厳守事項】
+
+- 有効なJSONオブジェクトのみを出力する
+- JSONの前後に説明文、見出し、注釈を付けない
+- Markdownのコードフェンスを付けない
+- 途中で省略しない
+- skill_nameとdefinitionは必ず文字列とする
+- skills以外のトップレベル項目は出力しない
+
 【出力形式】
 
-{
+{{
   "skills": [
-    {
+        {{
       "skill_name": "",
       "definition": ""
-    }
+        }}
   ]
-}
+}}
 
 以下が分析対象データです:
 {records}
@@ -79,7 +88,7 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     処理概要:
     1. 入力イベントからS3のバケット/キーを解決
     2. CSVを取得して固定列(A-F)を抽出
-    3. Bedrock Claudeへプロンプトを送信しスキルマスタ生成
+    3. Bedrockモデルへプロンプトを送信しスキルマスタ生成
     4. 生成結果をDynamoDBへ保存
     """
     logger.info("Received event")
@@ -231,8 +240,7 @@ def _invoke_bedrock(model_id: str, prompt: str) -> dict[str, Any]:
 
     request_body = {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 1000,
-        "temperature": 0.1,
+        "max_tokens": 1500,
         "messages": [{"role": "user", "content": prompt}],
     }
 
@@ -245,20 +253,28 @@ def _invoke_bedrock(model_id: str, prompt: str) -> dict[str, Any]:
 
     payload = json.loads(response["body"].read())
     generated_text = _extract_bedrock_text(payload)
-    return _parse_skill_master_json(generated_text)
+    try:
+        return _parse_skill_master_json(generated_text)
+    except json.JSONDecodeError:
+        _log_bedrock_json_parse_failure(generated_text, payload)
+        raise
 
 
 def _extract_bedrock_text(payload: dict[str, Any]) -> str:
     """Bedrockレスポンスから生成テキスト本体を取り出す。"""
     content = payload.get("content")
-    if isinstance(content, list) and content:
-        text = content[0].get("text")
-        if isinstance(text, str) and text.strip():
-            return text.strip()
-
-    output_text = payload.get("outputText")
-    if isinstance(output_text, str) and output_text.strip():
-        return output_text.strip()
+    if isinstance(content, list):
+        text_blocks: list[str] = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            if item.get("type") != "text":
+                continue
+            text = item.get("text")
+            if isinstance(text, str) and text.strip():
+                text_blocks.append(text.strip())
+        if text_blocks:
+            return "\n".join(text_blocks)
 
     raise ValueError("Unable to extract text from Bedrock response")
 
@@ -270,14 +286,7 @@ def _parse_skill_master_json(text: str) -> dict[str, Any]:
     - skills配列の形式を検証
     - 0件のみエラーとし、10〜20件の範囲外はwarningを出す
     """
-    json_text = text.strip()
-
-    # Claudeが```json ... ```形式で返すケースに対応する。
-    if json_text.startswith("```"):
-        json_text = re.sub(r"^```(?:json)?", "", json_text).strip()
-        json_text = re.sub(r"```$", "", json_text).strip()
-
-    data = json.loads(json_text)
+    data = _extract_json_object(text)
     skills = data.get("skills")
 
     if not isinstance(skills, list):
@@ -305,6 +314,61 @@ def _parse_skill_master_json(text: str) -> dict[str, Any]:
         )
 
     return {"skills": normalized_skills}
+
+
+def _extract_json_object(text: str) -> dict[str, Any]:
+    """生成テキストから最初に解析可能なJSONオブジェクトを取り出す。"""
+    json_text = text.strip()
+
+    try:
+        data = json.loads(json_text)
+        if isinstance(data, dict):
+            return data
+    except json.JSONDecodeError:
+        pass
+
+    for match in re.finditer(r"```(?:json)?\s*(.*?)```", json_text, re.DOTALL):
+        fenced_text = match.group(1).strip()
+        try:
+            data = json.loads(fenced_text)
+            if isinstance(data, dict):
+                return data
+        except json.JSONDecodeError:
+            continue
+
+    decoder = json.JSONDecoder()
+    last_error: json.JSONDecodeError | None = None
+    for index, char in enumerate(json_text):
+        if char != "{":
+            continue
+        try:
+            data, _end = decoder.raw_decode(json_text[index:])
+        except json.JSONDecodeError as err:
+            last_error = err
+            continue
+        if isinstance(data, dict):
+            return data
+
+    if last_error is not None:
+        raise last_error
+    raise json.JSONDecodeError("No JSON object found", json_text, 0)
+
+
+def _log_bedrock_json_parse_failure(text: str, payload: dict[str, Any]) -> None:
+    """JSON解析失敗時に、機微な全文を避けて診断情報だけを出力する。"""
+    usage = payload.get("usage")
+    if not isinstance(usage, dict):
+        usage = {}
+
+    logger.warning(
+        "Failed to parse Bedrock JSON response: text_length=%s, text_prefix=%r, "
+        "stop_reason=%s, input_tokens=%s, output_tokens=%s",
+        len(text),
+        text[:500],
+        payload.get("stop_reason"),
+        usage.get("input_tokens"),
+        usage.get("output_tokens"),
+    )
 
 
 def _save_skill_master(
