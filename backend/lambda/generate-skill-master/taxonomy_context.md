@@ -1,536 +1,536 @@
-# Lightcast Skill Taxonomy
+# Lightcast スキルタクソノミー（日本語訳）
 
-## Administration
+## 事務・管理
 
-- Administrative Support and Clerical Tasks
-- Dictation
-- Document Management
-- Office and Productivity Equipment and Technology
-- Office Management
-- Scheduling
+- 事務サポート・クラークタスク
+- 口述筆記
+- 文書管理
+- オフィス機器・生産性向上ツール
+- オフィスマネジメント
+- スケジューリング
 
-## Agriculture, Horticulture, and Landscaping
+## 農業・園芸・造園
 
-- Agricultural Management and Operations
-- Agricultural Research and Agronomy
-- Agriculture and Crop Farming
-- Aquaculture
-- Cannabis
-- Landscaping and Horticulture
-- Livestock Farming
+- 農業マネジメント・オペレーション
+- 農業研究・農学
+- 農業・作物栽培
+- 養殖業
+- 大麻栽培
+- 造園・園芸
+- 畜産
 
-## Analysis
+## 分析
 
-- Business Intelligence
-- Business Intelligence Software
-- Data Analysis
-- Data Science
-- Data Visualization
-- Image Analysis
-- Mathematical Software
-- Mathematics and Mathematical Modeling
-- Natural Language Processing (NLP)
-- Statistical Software
-- Statistics
+- ビジネスインテリジェンス
+- ビジネスインテリジェンスソフトウェア
+- データ分析
+- データサイエンス
+- データ可視化
+- 画像解析
+- 数理ソフトウェア
+- 数学・数理モデリング
+- 自然言語処理（NLP）
+- 統計ソフトウェア
+- 統計学
 
-## Architecture and Construction
+## 建築・建設
 
-- Architectural Design
-- Carpentry
-- Concrete and Masonry
-- Construction Estimating
-- Construction Inspection
-- Construction Management
-- Construction Painting
-- Electrical Construction
-- General Construction and Construction Labor
-- Green Architecture
-- Heavy Equipment Operation
-- Insulation
-- Interior Design
-- Road and Bridge Construction
-- Roofing
+- 建築デザイン
+- 大工作業
+- コンクリート・レンガ工事
+- 建設見積り
+- 建設検査
+- 建設マネジメント
+- 建設塗装
+- 電気設備工事
+- 一般建設・建設労働
+- グリーンアーキテクチャ
+- 重機操作
+- 断熱工事
+- インテリアデザイン
+- 道路・橋梁建設
+- 屋根工事
 
-## Business
+## ビジネス
 
-- Business Analysis
-- Business Communications
-- Business Consulting
-- Business Continuity
-- Business Leadership
-- Business Management
-- Business Operations
-- Business Solutions
-- Business Strategy
-- Contract Management
-- Customer Relationship Management (CRM)
-- Internal Controls
-- People Management
-- Performance Management
-- Pricing Analysis
-- Process Improvement and Optimization
-- Product Management
-- Project Management
-- Risk Management
+- ビジネス分析
+- ビジネスコミュニケーション
+- ビジネスコンサルティング
+- 事業継続計画
+- ビジネスリーダーシップ
+- ビジネスマネジメント
+- 事業運営
+- ビジネスソリューション
+- ビジネス戦略
+- 契約管理
+- 顧客関係管理（CRM）
+- 内部統制
+- 人材マネジメント
+- パフォーマンスマネジメント
+- 価格分析
+- プロセス改善・最適化
+- プロダクトマネジメント
+- プロジェクトマネジメント
+- リスクマネジメント
 
-## Customer and Client Support
+## 顧客・クライアントサポート
 
-- Cash Register Operation
-- Client Support
-- Customer Service
-- Insurance and Warranty Claims Processing
-- Payment Processing and Collection
+- レジ操作
+- クライアントサポート
+- カスタマーサービス
+- 保険・保証クレーム処理
+- 決済処理・回収業務
 
-## Design
+## デザイン
 
-- Animation and Game Design
-- Art and Illustration
-- Creative Design
-- Digital Design
-- Graphic and Visual Design
-- Graphic and Visual Design Software
-- Industrial Design
-- Presentation Design
-- User Interface and User Experience (UI/UX) Design
+- アニメーション・ゲームデザイン
+- アート・イラストレーション
+- クリエイティブデザイン
+- デジタルデザイン
+- グラフィック・ビジュアルデザイン
+- グラフィック・ビジュアルデザインソフトウェア
+- 工業デザイン
+- プレゼンテーションデザイン
+- UI/UXデザイン
 
-## Economics, Policy, and Social Studies
+## 経済学・政策・社会科学
 
-- Economics
-- Policy Analysis, Research, and Development
-- Social Studies
-- Urban and Regional Planning
+- 経済学
+- 政策分析・研究・開発
+- 社会科学
+- 都市・地域計画
 
-## Education and Training
+## 教育・研修
 
-- Childhood Education and Development
-- Education Administration
-- Education Software and Technology
-- Higher Education
-- Instructional and Curriculum Design
-- Library and Archiving
-- Program Management
-- Special Education
-- Student Support and Services
-- Teaching
-- Training Programs
+- 幼児教育・発達
+- 教育行政
+- 教育ソフトウェア・テクノロジー
+- 高等教育
+- 教育課程デザイン
+- 図書館・アーカイブ管理
+- プログラムマネジメント
+- 特別支援教育
+- 学生支援・サービス
+- 教育・指導
+- 研修プログラム
 
-## Energy and Utilities
+## エネルギー・公益事業
 
-- Clean Energy
-- Electrical Power
-- Energy Efficiency
-- Energy Management
-- Natural Gas
-- Nuclear Energy
-- Oil and Gas
-- Power Generation
-- Solar Energy
-- Water Energy
-- Water Supply, Testing, and Treatment
-- Wind Energy
+- クリーンエネルギー
+- 電力
+- エネルギー効率
+- エネルギーマネジメント
+- 天然ガス
+- 原子力エネルギー
+- 石油・ガス
+- 発電
+- 太陽光エネルギー
+- 水力エネルギー
+- 上下水道・水質検査・水処理
+- 風力エネルギー
 
-## Engineering
+## エンジニアリング
 
-- Aerospace Engineering
-- Automation Engineering
-- Automotive Technologies
-- Chemical and Biomedical Engineering
-- Circuitry
-- Civil and Architectural Engineering
-- Drafting and Engineering Design
-- Electrical and Computer Engineering
-- Electromechanical Engineering
-- Electronic Hardware
-- Electronics Engineering
-- Engineering Practices
-- Engineering Software
-- Engineering, Other
-- Engineering, Scientific, and Technical Instruments
-- Geological Engineering
-- Hardware Description Languages (HDL)
-- Industrial Engineering
-- Marine and Naval Engineering
-- Materials Science and Engineering
-- Mechanical Engineering
-- Mining Engineering
-- Optical Engineering
-- Process Engineering
-- Radio Frequency (RF)
-- Roads and Drainage
-- Robotics
-- Signal Processing
-- Simulation and Simulation Software
-- Surveying and Cartography
+- 航空宇宙工学
+- 自動化エンジニアリング
+- 自動車技術
+- 化学・生体医工学
+- 回路設計
+- 土木・建築工学
+- 製図・エンジニアリングデザイン
+- 電気・コンピュータ工学
+- 電気機械工学
+- 電子ハードウェア
+- 電子工学
+- エンジニアリング実務
+- エンジニアリングソフトウェア
+- エンジニアリング（その他）
+- エンジニアリング・科学・技術機器
+- 地質工学
+- ハードウェア記述言語（HDL）
+- 産業工学
+- 船舶・海洋工学
+- 材料科学・工学
+- 機械工学
+- 鉱山工学
+- 光学工学
+- プロセスエンジニアリング
+- 高周波（RF）
+- 道路・排水設備
+- ロボティクス
+- 信号処理
+- シミュレーション・シミュレーションソフトウェア
+- 測量・地図作成
 
-## Environment
+## 環境
 
-- Air Quality and Emissions
-- Climate Change
-- Conservation
-- Ecology
-- Environment and Resource Management
-- Environmental Engineering and Restoration
-- Environmental Geology
-- Environmental Regulations
-- Forestry
-- Hazardous Materials Management
-- Waste Management
+- 大気質・排出ガス
+- 気候変動
+- 保全活動
+- 生態学
+- 環境・資源マネジメント
+- 環境工学・修復
+- 環境地質学
+- 環境規制
+- 林業
+- 有害物質管理
+- 廃棄物管理
 
-## Finance
+## 金融
 
-- Accounting and Finance Software
-- Accounts Payable and Receivable
-- Banking Services
-- Billing and Invoicing
-- Budget Management
-- Cash Management
-- Commercial Lending
-- Cost Accounting
-- Cryptocurrency
-- Electronic Trading
-- Financial Accounting
-- Financial Advisement
-- Financial Analysis
-- Financial Management
-- Financial Modeling
-- Financial Regulation
-- Financial Reporting
-- Financial Trading
-- General Accounting
-- General Finance
-- General Lending
-- Insurance
-- Investment Management
-- Mergers and Acquisitions
-- Mortgage Lending
-- Specialized Accounting
-- Structured Finance
-- Tax
-- Underwriting
+- 会計・財務ソフトウェア
+- 買掛金・売掛金管理
+- 銀行業務
+- 請求・課金業務
+- 予算管理
+- キャッシュマネジメント
+- 商業融資
+- 原価計算
+- 暗号資産
+- 電子取引
+- 財務会計
+- 財務アドバイザリー
+- 財務分析
+- 財務マネジメント
+- 財務モデリング
+- 金融規制
+- 財務報告
+- 金融取引
+- 一般会計
+- 一般財務
+- 一般融資
+- 保険
+- 投資マネジメント
+- M&A（合併・買収）
+- 住宅ローン
+- 専門会計
+- ストラクチャードファイナンス
+- 税務
+- 引受審査（アンダーライティング）
 
-## Health Care
+## 医療
 
-- Alternative Therapy
-- Anesthesiology
-- Animal Health and Veterinary Medicine
-- Blood Collection
-- Cardiology
-- Clinical Informatics
-- Dermatology
-- Ear, Nose, and Throat
-- Emergency and Intensive Care
-- Endocrinology
-- Eye Care
-- First Aid
-- Gastroenterology
-- General Medical Tests and Procedures
-- General Medicine
-- Genetic Disorders
-- Geriatrics
-- Health Care Administration
-- Health Care Procedure and Regulation
-- Health Information Management and Medical Records
-- Hematology
-- Hepatology
-- Home Health Care and Assisted Living
-- Immunology
-- Infectious Diseases
-- Injury Treatment
-- Medical Billing and Coding
-- Medical Equipment and Technology
-- Medical Imaging
-- Medical Support
-- Mental and Behavioral Health Specialties
-- Mental Health Diseases and Disorders
-- Mental Health Therapies
-- Mobility Assistance
-- Nephrology
-- Neurology
-- Nuclear Medicine
-- Nursing and Patient Care
-- Nutrition and Diet
-- Obstetrics and Gynecology (OBGYN)
-- Oncology
-- Oral and Dental Care
-- Orthopedics
-- Pathology
-- Patient Education and Support
-- Pediatrics
-- Pharmacy
-- Physical Therapy
-- Poison Control
-- Public Health and Disease Prevention
-- Pulmonology
-- Rehabilitation
-- Speech Language Pathology
-- Surgery
-- Urology
+- 代替療法
+- 麻酔科学
+- 動物医療・獣医学
+- 採血業務
+- 循環器内科
+- 臨床情報学
+- 皮膚科
+- 耳鼻咽喉科
+- 救急・集中治療
+- 内分泌科
+- 眼科
+- 応急処置
+- 消化器内科
+- 一般的な医療検査・処置
+- 一般医療
+- 遺伝性疾患
+- 老年医学
+- ヘルスケア行政
+- ヘルスケア手続き・規制
+- 医療情報管理・カルテ管理
+- 血液学
+- 肝臓病学
+- 在宅医療・介助生活支援
+- 免疫学
+- 感染症
+- 外傷治療
+- 医療請求・コーディング
+- 医療機器・技術
+- 医用画像
+- 医療サポート
+- 精神・行動保健専門分野
+- 精神疾患・障害
+- メンタルヘルス療法
+- 移動介助
+- 腎臓病学
+- 神経学
+- 核医学
+- 看護・患者ケア
+- 栄養・食事療法
+- 産婦人科（OBGYN）
+- 腫瘍学
+- 歯科・口腔ケア
+- 整形外科
+- 病理学
+- 患者教育・支援
+- 小児科
+- 薬学
+- 理学療法
+- 中毒管理
+- 公衆衛生・疾病予防
+- 呼吸器内科
+- リハビリテーション
+- 言語聴覚療法
+- 外科
+- 泌尿器科
 
-## Hospitality and Food Services
+## ホスピタリティ・フードサービス
 
-- Events and Conferences
-- Food and Beverage
-- Hospitality Services
-- Hotels and Accommodations
-- Travel and Tourism
+- イベント・カンファレンス運営
+- 飲食業
+- ホスピタリティサービス
+- ホテル・宿泊業
+- 旅行・観光業
 
-## Human Resources
+## 人事
 
-- Compensation and Benefits
-- Employee Relations
-- Employee Training
-- Human Resources Management and Planning
-- Human Resources Software
-- Payroll
-- Recruitment
+- 報酬・福利厚生
+- 従業員関係
+- 従業員研修
+- 人事マネジメント・企画
+- 人事ソフトウェア
+- 給与計算
+- 採用
 
-## Information Technology
+## 情報技術
 
-- Agile Software Development
-- Application Programming Interface (API)
-- Artificial Intelligence and Machine Learning (AI/ML)
-- Augmented and Virtual Reality (AR/VR)
-- Backup Software
-- Basic Technical Knowledge
-- Blockchain
-- C and C++
-- Cloud Computing
-- Cloud Solutions
-- Collaborative Software
-- Computer Hardware
-- Computer Science
-- Configuration Management
-- Content Management Systems
-- Cybersecurity
-- Data Collection
-- Data Management
-- Data Storage
-- Database Architecture and Administration
-- Databases
-- Distributed Computing
-- Enterprise Application Management
-- Enterprise Information Management
-- Extensible Languages and XML
-- Extraction, Transformation, and Loading (ETL)
-- Firmware
-- General Networking
-- Geospatial Information and Technology
-- Identity and Access Management
-- Integrated Development Environments (IDEs)
-- Internet of Things (IoT)
-- iOS Development
-- IT Automation
-- IT Management
+- アジャイルソフトウェア開発
+- API（アプリケーションプログラミングインターフェース）
+- AI・機械学習（AI/ML）
+- AR/VR（拡張現実・仮想現実）
+- バックアップソフトウェア
+- 基礎的な技術知識
+- ブロックチェーン
+- C・C++
+- クラウドコンピューティング
+- クラウドソリューション
+- コラボレーションソフトウェア
+- コンピュータハードウェア
+- コンピュータサイエンス
+- コンフィギュレーション管理
+- コンテンツ管理システム
+- サイバーセキュリティ
+- データ収集
+- データマネジメント
+- データストレージ
+- データベースアーキテクチャ・管理
+- データベース
+- 分散コンピューティング
+- エンタープライズアプリケーション管理
+- エンタープライズ情報管理
+- 拡張言語・XML
+- ETL（抽出・変換・ロード）
+- ファームウェア
+- 一般ネットワーキング
+- 地理空間情報・技術
+- ID・アクセス管理
+- 統合開発環境（IDE）
+- IoT（モノのインターネット）
+- iOS開発
+- ITオートメーション
+- IT管理
 - Java
-- JavaScript and jQuery
-- Log Management
-- Mainframe Technologies
-- Malware Protection
-- Microsoft Development Tools
+- JavaScript・jQuery
+- ログ管理
+- メインフレーム技術
+- マルウェア対策
+- Microsoft開発ツール
 - Microsoft Windows
-- Middleware
-- Mobile Development
-- Network Protocols
-- Network Security
-- Networking Hardware
-- Networking Software
-- Operating Systems
-- Other Programming Languages
-- Query Languages
-- Scripting
-- Scripting Languages
-- Search Engines
-- Servers
-- Software Development
-- Software Development Tools
-- Software Quality Assurance
-- System Design and Implementation
-- Systems Administration
-- Technical Support and Services
-- Telecommunications
-- Test Automation
-- Version Control
-- Video and Web Conferencing
-- Virtualization and Virtual Machines
-- Web Content
-- Web Design and Development
-- Web Services
-- Wireless Technologies
+- ミドルウェア
+- モバイル開発
+- ネットワークプロトコル
+- ネットワークセキュリティ
+- ネットワーキングハードウェア
+- ネットワーキングソフトウェア
+- オペレーティングシステム
+- その他のプログラミング言語
+- クエリ言語
+- スクリプティング
+- スクリプト言語
+- 検索エンジン
+- サーバー
+- ソフトウェア開発
+- ソフトウェア開発ツール
+- ソフトウェア品質保証
+- システム設計・実装
+- システム管理
+- テクニカルサポート・サービス
+- 電気通信
+- テスト自動化
+- バージョン管理
+- ビデオ・Web会議
+- 仮想化・仮想マシン
+- Webコンテンツ
+- Webデザイン・開発
+- Webサービス
+- ワイヤレス技術
 
-## Law, Regulation, and Compliance
+## 法務・規制・コンプライアンス
 
-- Auditing
-- Criminal Investigation and Forensics
-- Labor Compliance
-- Law Enforcement and Criminal Justice
-- Legal Proceedings
-- Legal Support
-- Litigation and Civil Justice
-- Occupational Health and Safety
-- Property Law
-- Quality Assurance and Control
-- Regulation and Legal Compliance
+- 監査
+- 犯罪捜査・鑑識
+- 労働コンプライアンス
+- 法執行・刑事司法
+- 法的手続き
+- 法務サポート
+- 訴訟・民事司法
+- 労働安全衛生
+- 不動産法
+- 品質保証・管理
+- 法規制コンプライアンス
 
-## Maintenance, Repair, and Facility Services
+## メンテナンス・修理・施設サービス
 
-- Appliance Repair and Maintenance
-- Basic Electrical Systems
-- Cleaning and Janitorial Services
-- Equipment Repair and Maintenance
-- Facility Management and Maintenance
-- General Repairs and Maintenance
-- Groundskeeping and Yard Care
-- Hand Tools
-- HVAC
-- Plumbing
-- Power Tools
-- Telecommunications Equipment and Installation
-- Vehicle Repair and Maintenance
+- 家電修理・メンテナンス
+- 基礎電気システム
+- 清掃・用務業務
+- 設備修理・メンテナンス
+- 施設管理・メンテナンス
+- 一般修理・メンテナンス
+- 造園・庭園管理
+- 手工具
+- HVAC（空調設備）
+- 配管工事
+- 電動工具
+- 電気通信設備・設置
+- 車両修理・メンテナンス
 
-## Manufacturing and Production
+## 製造・生産
 
-- Computer-Aided Manufacturing
-- Electronics Manufacturing
-- Food Science and Processing
-- Lean Manufacturing
-- Machinery
-- Manufacturing Design
-- Manufacturing Processes
-- Manufacturing Standards
-- Metal Fabrication
-- Micro Manufacturing
-- Plant Operations and Management
-- Product Development
-- Product Inspection
-- Production and Assembly
-- Textiles
-- Transportation Equipment Manufacturing
-- Welding, Brazing, and Soldering
+- コンピュータ支援製造（CAM）
+- 電子機器製造
+- 食品科学・加工
+- リーン生産方式
+- 機械
+- 製造デザイン
+- 製造プロセス
+- 製造規格
+- 金属加工
+- マイクロ製造
+- プラント運営・管理
+- プロダクト開発
+- 製品検査
+- 生産・組立
+- 繊維業
+- 輸送機器製造
+- 溶接・ろう付け・はんだ付け
 
-## Marketing and Public Relations
+## マーケティング・広報
 
-- Advertising
-- Brand Management
-- Digital Marketing
-- Fundraising and Crowdsourcing
-- Industry Specific Marketing
-- Market Analysis
-- Marketing Software
-- Marketing Strategy and Techniques
-- Online Advertising
-- Promotions and Campaigns
-- Public Relations
-- Social Media
-- Web Analytics and SEO
+- 広告
+- ブランドマネジメント
+- デジタルマーケティング
+- 資金調達・クラウドファンディング
+- 業界特化型マーケティング
+- 市場分析
+- マーケティングソフトウェア
+- マーケティング戦略・手法
+- オンライン広告
+- プロモーション・キャンペーン
+- 広報（PR）
+- ソーシャルメディア
+- Web解析・SEO
 
-## Media and Communications
+## メディア・コミュニケーション
 
-- Audio Production and Technology
-- Communication
-- Content Development and Management
-- Journalism
-- Language Competency
-- Language Interpretation, Translation, and Studies
-- Literature and Literary Studies
-- Media Production
-- Photo/Video Production and Technology
-- Streaming Media Systems
-- Writing and Editing
+- 音声制作・技術
+- コミュニケーション
+- コンテンツ開発・管理
+- ジャーナリズム
+- 語学力
+- 言語通訳・翻訳・言語学
+- 文学・文芸研究
+- メディア制作
+- 写真・映像制作・技術
+- ストリーミングメディアシステム
+- ライティング・編集
 
-## Performing Arts, Sports, and Recreation
+## 舞台芸術・スポーツ・レクリエーション
 
-- Coaching and Athletic Training
-- Dance
-- Music
-- Sports and Recreation
-- Theatre and Performance Art
+- コーチング・アスレチックトレーニング
+- ダンス
+- 音楽
+- スポーツ・レクリエーション
+- 演劇・舞台芸術
 
-## Personal Care and Services
+## パーソナルケア・サービス
 
-- Animal Care
-- Beauty and Body Treatments and Alterations
-- Child Care
-- Funeral and Mortuary Services
+- 動物ケア
+- 美容・ボディケア・施術
+- 保育
+- 葬祭業
 
-## Physical and Inherent Abilities
+## 身体的・生来の能力
 
-- Critical Thinking and Problem Solving
-- Initiative and Leadership
-- Personal Attributes
-- Physical Abilities
-- Social Skills
+- 批判的思考・問題解決
+- 主体性・リーダーシップ
+- パーソナルアトリビュート（個人特性）
+- 身体能力
+- 対人スキル
 
-## Property and Real Estate
+## 不動産
 
-- Property Management
-- Real Estate Development
-- Real Estate Sales
+- 不動産管理
+- 不動産開発
+- 不動産販売
 
-## Public Safety and National Security
+## 公共安全・国家安全保障
 
-- Disaster Management
-- Emergency Services
-- Fire Prevention, Safety, and Control
-- Intelligence Collection and Analysis
-- Military Operations
-- Military Technology and Weapons
-- Safety and Security
-- Safety and Surveillance Technology
+- 災害管理
+- 緊急対応サービス
+- 防火・安全・消火管理
+- 情報収集・分析
+- 軍事作戦
+- 軍事技術・兵器
+- 安全・セキュリティ
+- 安全・監視技術
 
-## Sales
+## 営業
 
-- Account Management
-- Business-to-Business (B2B) Sales
-- Company, Product, and Service Knowledge
-- E-Commerce
-- General Sales Practices
-- Merchandising
-- Prospecting and Qualification
-- Retail Sales
-- Sales Analysis
-- Sales Management
-- Solution Sales Engineering
-- Specialized Sales
+- アカウントマネジメント
+- B2B（企業間）営業
+- 会社・製品・サービス知識
+- Eコマース
+- 一般的な営業手法
+- マーチャンダイジング
+- プロスペクティング・クオリフィケーション（見込み客開拓）
+- 小売販売
+- 営業分析
+- 営業マネジメント
+- ソリューション営業エンジニアリング
+- 専門営業
 
-## Science and Research
+## 科学・研究
 
-- Bioinformatics
-- Biology
-- Biotechnology
-- Chemistry
-- Clinical Trials
-- Earth and Space Science
-- Elements, Compounds, and Materials
-- General Science and Research
-- Genetics
-- Laboratory Research
-- Medical Science and Research
-- Molecular, Cellular, and Microbiology
-- Neuroscience
-- Pharmacology and Drug Discovery
-- Physics
-- Science Software
+- バイオインフォマティクス
+- 生物学
+- バイオテクノロジー
+- 化学
+- 臨床試験
+- 地球科学・宇宙科学
+- 元素・化合物・材料
+- 一般科学・研究
+- 遺伝学
+- 実験研究
+- 医科学・医学研究
+- 分子・細胞・微生物学
+- 神経科学
+- 薬理学・創薬
+- 物理学
+- 科学ソフトウェア
 
-## Social and Human Services
+## 社会福祉・対人援助サービス
 
-- Community and Social Work
-- Counseling Services
-- Government Assistance
-- Religious Studies and Services
+- コミュニティ・ソーシャルワーク
+- カウンセリングサービス
+- 政府扶助
+- 宗教研究・サービス
 
-## Transportation, Supply Chain, and Logistics
+## 運輸・サプライチェーン・物流
 
-- Air Transportation
-- General Shipping and Receiving
-- Ground Freight Transportation
-- Ground Passenger Transportation
-- Inventory and Warehousing
-- Logistics
-- Material Handling
-- Procurement
-- Rail Transportation
-- Sea and Waterway Transportation
-- Supplier Management
-- Supply Chain Management
-- Transportation Operations
-- Transportation Security
+- 航空輸送
+- 一般出荷・受入業務
+- 陸上貨物輸送
+- 陸上旅客輸送
+- 在庫・倉庫管理
+- 物流
+- マテリアルハンドリング
+- 調達
+- 鉄道輸送
+- 海上・水上輸送
+- サプライヤーマネジメント
+- サプライチェーンマネジメント
+- 輸送オペレーション
+- 輸送セキュリティ
