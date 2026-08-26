@@ -110,9 +110,9 @@ class GenerateSkillMasterTest(unittest.TestCase):
 
         taxonomy_context = app._load_taxonomy_context()
 
-        self.assertIn("# Lightcast Skill Taxonomy", taxonomy_context)
-        self.assertIn("## Analysis", taxonomy_context)
-        self.assertIn("- Data Analysis", taxonomy_context)
+        self.assertIn("# Lightcast スキルタクソノミー（日本語訳）", taxonomy_context)
+        self.assertIn("## 分析", taxonomy_context)
+        self.assertIn("- データ分析", taxonomy_context)
         self.assertNotIn("�", taxonomy_context)
 
     def test_load_taxonomy_context_rejects_missing_file(self):
