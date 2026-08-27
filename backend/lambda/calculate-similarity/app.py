@@ -60,10 +60,12 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
             )
 
         # 選択ポジションの中核スキル集合を基準に、他ポジションをランキングする。
-        selected_core_skills = _core_skill_keys(selected_skills)
+        selected_core_skills = _core_skill_ids(selected_skills)
+        chart_axis = _chart_axis(selected_skills)
         results = _rank_similar_positions(
             selected_position_id,
             selected_core_skills,
+            chart_axis,
             skills_by_position,
             position_names,
         )
@@ -80,6 +82,7 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
             {
                 "dataFound": True,
                 "selectedPositionId": selected_position_id,
+                "chartAxis": chart_axis,
                 "results": results,
             },
         )
@@ -156,39 +159,77 @@ def _position_names(items: list[dict[str, Any]]) -> dict[str, str]:
     return names
 
 
-def _core_skill_keys(skills: list[dict[str, Any]]) -> set[tuple[str, int]]:
-    """平均+標準偏差以上の(skillId, level)を中核スキルとして扱う。"""
+def _core_skill_ids(skills: list[dict[str, Any]]) -> set[str]:
+    """平均+標準偏差以上のスキルIDを中核スキルとして扱う。"""
     levels = [skill["level"] for skill in skills]
     if not levels:
         return set()
     mean = sum(levels) / len(levels)
     variance = sum((level - mean) ** 2 for level in levels) / len(levels)
     threshold = mean + math.sqrt(variance)
-    return {
-        (skill["skillId"], skill["level"])
-        for skill in skills
-        if skill["level"] >= threshold
-    }
+    return {skill["skillId"] for skill in skills if skill["level"] >= threshold}
 
 
-def _chart_skills(skills: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """類似ポジションカードの小型レーダーチャートに出す代表スキルを選ぶ。"""
-    sorted_skills = sorted(
-        skills, key=lambda skill: (-skill["level"], skill["skillName"])
+def _chart_axis(skills: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """選択ポジションの最高スキルと代表Lightcast大分類から共通チャート軸を作る。"""
+    positive_skills = [skill for skill in skills if skill["level"] > 0]
+    if not positive_skills:
+        return []
+
+    highest_skill = sorted(
+        positive_skills,
+        key=lambda skill: (-skill["level"], skill["skillName"], skill["skillId"]),
+    )[0]
+    representative_category = _representative_lightcast_category(skills)
+    category_skills = sorted(
+        [
+            skill
+            for skill in positive_skills
+            if skill.get("lightcastCategory", "") == representative_category
+        ],
+        key=lambda skill: (-skill["level"], skill["skillName"], skill["skillId"]),
     )
+
+    selected: list[dict[str, Any]] = []
+    seen_skill_ids: set[str] = set()
+    for skill in [highest_skill, *category_skills]:
+        if skill["skillId"] in seen_skill_ids:
+            continue
+        seen_skill_ids.add(skill["skillId"])
+        selected.append(skill)
+        if len(selected) >= MAX_CHART_SKILL_COUNT:
+            break
+
     return [
         {
             "skillId": skill["skillId"],
             "skillName": skill["skillName"],
-            "level": skill["level"],
         }
-        for skill in sorted_skills[:MAX_CHART_SKILL_COUNT]
+        for skill in selected
     ]
 
 
-def _jaccard_similarity(
-    left: set[tuple[str, int]], right: set[tuple[str, int]]
-) -> float:
+def _representative_lightcast_category(skills: list[dict[str, Any]]) -> str:
+    category_levels: dict[str, list[int]] = {}
+    for skill in skills:
+        category = skill.get("lightcastCategory", "")
+        category_levels.setdefault(category, []).append(skill["level"])
+    averages = [
+        (sum(levels) / len(levels), category)
+        for category, levels in category_levels.items()
+    ]
+    averages.sort(key=lambda item: (-item[0], item[1]))
+    return averages[0][1] if averages else ""
+
+
+def _chart_values(
+    skills: list[dict[str, Any]], chart_axis: list[dict[str, str]]
+) -> list[int]:
+    levels_by_skill_id = {skill["skillId"]: skill["level"] for skill in skills}
+    return [levels_by_skill_id.get(axis["skillId"], 0) for axis in chart_axis]
+
+
+def _jaccard_similarity(left: set[str], right: set[str]) -> float:
     """2つの中核スキル集合からJaccard係数を計算する。"""
     union = left | right
     if not union:
@@ -198,7 +239,8 @@ def _jaccard_similarity(
 
 def _rank_similar_positions(
     selected_position_id: str,
-    selected_core_skills: set[tuple[str, int]],
+    selected_core_skills: set[str],
+    chart_axis: list[dict[str, str]],
     skills_by_position: dict[str, list[dict[str, Any]]],
     position_names: dict[str, str],
 ) -> list[dict[str, Any]]:
@@ -208,7 +250,7 @@ def _rank_similar_positions(
         if position_id == selected_position_id:
             continue
         first_skill = skills[0]
-        score = _jaccard_similarity(selected_core_skills, _core_skill_keys(skills))
+        score = _jaccard_similarity(selected_core_skills, _core_skill_ids(skills))
         scored_results.append(
             {
                 "positionId": position_id,
@@ -216,7 +258,7 @@ def _rank_similar_positions(
                 "organizationName": first_skill.get("organizationName", ""),
                 "businessUnitName": first_skill.get("businessUnitName", ""),
                 "similarityScore": round(score, 4),
-                "chartSkills": _chart_skills(skills),
+                "chartValues": _chart_values(skills, chart_axis),
             }
         )
 

@@ -398,12 +398,19 @@ def _load_skill_master(table_name: str) -> list[dict[str, str]]:
         for item in response.get("Items", []):
             skill_id = _normalize_cell(item.get("skillId"))
             skill_name = _normalize_cell(item.get("skillName"))
+            lightcast_category = _normalize_cell(item.get("lightcastCategory"))
             if not skill_id or not skill_name:
                 continue
             if skill_id in seen_skill_ids:
                 raise ValueError(f"Duplicate skillId found in SkillMaster: {skill_id}")
             seen_skill_ids.add(skill_id)
-            items.append({"skillId": skill_id, "skillName": skill_name})
+            items.append(
+                {
+                    "skillId": skill_id,
+                    "skillName": skill_name,
+                    "lightcastCategory": lightcast_category,
+                }
+            )
         last_key = response.get("LastEvaluatedKey")
         if not last_key:
             break
@@ -499,7 +506,12 @@ def _restore_skill_levels(
     if len(skill_batch) != len(levels):
         raise ValueError("levels count must match skill batch count before restore")
     return [
-        {"skillId": skill["skillId"], "skillName": skill["skillName"], "level": level}
+        {
+            "skillId": skill["skillId"],
+            "skillName": skill["skillName"],
+            "lightcastCategory": skill.get("lightcastCategory", ""),
+            "level": level,
+        }
         for skill, level in zip(skill_batch, levels)
     ]
 
@@ -560,6 +572,7 @@ def _save_position_skill_levels(
                     "businessUnitName": position["businessUnitName"],
                     "organizationName": position["organizationName"],
                     "skillName": skill_level["skillName"],
+                    "lightcastCategory": skill_level.get("lightcastCategory", ""),
                     "level": skill_level["level"],
                     "sourceBucket": source_bucket,
                     "sourceKey": source_key,

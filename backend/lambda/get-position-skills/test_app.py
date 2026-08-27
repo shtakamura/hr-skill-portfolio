@@ -122,6 +122,52 @@ class GetPositionSkillsTest(unittest.TestCase):
         self.assertNotIn("K", [skill["skillName"] for skill in body["skills"]])
         self.assertNotIn("Z", [skill["skillName"] for skill in body["skills"]])
 
+    def test_selects_highest_skill_plus_representative_lightcast_category(self):
+        items = [
+            {
+                "positionId": "POS",
+                "skillId": "tech",
+                "skillName": "技術戦略",
+                "lightcastCategory": "Technology",
+                "level": 5,
+            },
+            {
+                "positionId": "POS",
+                "skillId": "tech2",
+                "skillName": "技術補助",
+                "lightcastCategory": "Technology",
+                "level": 0,
+            },
+            {
+                "positionId": "POS",
+                "skillId": "m1",
+                "skillName": "リーダーシップ",
+                "lightcastCategory": "Management",
+                "level": 4,
+            },
+            {
+                "positionId": "POS",
+                "skillId": "m2",
+                "skillName": "チーム管理",
+                "lightcastCategory": "Management",
+                "level": 4,
+            },
+            {
+                "positionId": "POS",
+                "skillId": "data",
+                "skillName": "データ分析",
+                "lightcastCategory": "Data",
+                "level": 1,
+            },
+        ]
+
+        body = app._build_response(items, "POS")
+
+        self.assertEqual(
+            [skill["skillName"] for skill in body["skills"]],
+            ["技術戦略", "チーム管理", "リーダーシップ"],
+        )
+
     def test_level_zero_records_are_data_found_but_not_chart_skills(self):
         body = app._build_response(
             [

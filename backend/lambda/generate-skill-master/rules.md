@@ -50,13 +50,14 @@
 2. Lightcast Skill Taxonomyを参照し、スキル名の粒度と重複を調整する
 3. 意味的に重複する候補を統合する
 4. 組織横断で比較可能な自然な日本語のスキル名へ整理する
-5. スキル名だけをJSONで返す
+5. スキル名、分類、Lightcast大分類、分類理由をJSONで返す
 
 ## JSON出力契約
 
 - トップレベル項目はskillsだけとする
 - skillsは必ずJSON配列とする
-- skills配列の各要素は日本語のスキル名を表す文字列とする
+- skills配列の各要素はskillName、category、lightcastCategory、classificationReasonを持つオブジェクトとする
+- classificationReasonは最大1〜2文程度の簡潔な説明とする
 - definitionは生成しない
 - Markdownコードフェンスや説明文を付けない
 
@@ -64,8 +65,11 @@
 
 {
   "skills": [
-    "プロジェクト管理",
-    "データ分析・可視化",
-    "業務改善・最適化"
+    {
+      "skillName": "プロジェクト管理",
+      "category": "Business",
+      "lightcastCategory": "Management",
+      "classificationReason": "職務内容でプロジェクト推進、進捗管理、関係者調整が主要な責任として示されているため。"
+    }
   ]
 }

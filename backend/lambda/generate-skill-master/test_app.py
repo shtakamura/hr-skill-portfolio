@@ -35,9 +35,22 @@ class GenerateSkillMasterTest(unittest.TestCase):
 
     def _skill_json(self, count):
         return json.dumps(
-            {"skills": [f"スキル{i}" for i in range(count)]},
+            {
+                "skills": [
+                    {
+                        "skillName": f"スキル{i}",
+                        "category": "Business",
+                        "lightcastCategory": "Management",
+                        "classificationReason": "職務内容に関連するため。",
+                    }
+                    for i in range(count)
+                ]
+            },
             ensure_ascii=False,
         )
+
+    def _skill_names(self, skill_master):
+        return [skill["skillName"] for skill in skill_master["skills"]]
 
     def test_build_taxonomy_context_converts_categories_and_subcategories(self):
         builder = _load_taxonomy_builder()
@@ -196,7 +209,9 @@ class GenerateSkillMasterTest(unittest.TestCase):
 
         self.assertIn("Lightcast Skill Taxonomyを、スキル名称の標準化", fixed_text)
         self.assertIn("自然な日本語のスキル名", fixed_text)
-        self.assertIn("スキル名だけをJSONで返す", fixed_text)
+        self.assertIn(
+            "スキル名、分類、Lightcast大分類、分類理由をJSONで返す", fixed_text
+        )
         self.assertIn("definitionは生成しない", fixed_text)
         self.assertIn("制度名、規格名、手法名、組織機能名、成果名、KPI名", fixed_text)
         self.assertIn("能力・専門性を抽出する", fixed_text)
@@ -212,7 +227,40 @@ class GenerateSkillMasterTest(unittest.TestCase):
 
         skill_master = app._parse_skill_master_json('{"skills":["プロジェクト管理"]}')
 
-        self.assertEqual(skill_master, {"skills": ["プロジェクト管理"]})
+        self.assertEqual(self._skill_names(skill_master), ["プロジェクト管理"])
+
+    def test_parse_skill_master_json_accepts_classification_metadata(self):
+        import app
+
+        skill_master = app._parse_skill_master_json(
+            json.dumps(
+                {
+                    "skills": [
+                        {
+                            "skillName": "プロジェクト管理",
+                            "category": "Business",
+                            "lightcastCategory": "Management",
+                            "classificationReason": "プロジェクト推進が主要責任のため。",
+                        }
+                    ]
+                },
+                ensure_ascii=False,
+            )
+        )
+
+        self.assertEqual(
+            skill_master,
+            {
+                "skills": [
+                    {
+                        "skillName": "プロジェクト管理",
+                        "category": "Business",
+                        "lightcastCategory": "Management",
+                        "classificationReason": "プロジェクト推進が主要責任のため。",
+                    }
+                ]
+            },
+        )
 
     def test_parse_skill_master_json_accepts_21_skill_names(self):
         import app
@@ -267,7 +315,7 @@ class GenerateSkillMasterTest(unittest.TestCase):
             '{"skills":["", "  ", "データ分析"]}'
         )
 
-        self.assertEqual(skill_master, {"skills": ["データ分析"]})
+        self.assertEqual(self._skill_names(skill_master), ["データ分析"])
 
     def test_parse_skill_master_json_normalizes_and_deduplicates_skill_names(self):
         import app
@@ -279,7 +327,7 @@ class GenerateSkillMasterTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(skill_master, {"skills": ["データ 分析", "AI 活用"]})
+        self.assertEqual(self._skill_names(skill_master), ["データ 分析", "AI 活用"])
 
     def test_parse_skill_master_json_keeps_partial_matches_separate(self):
         import app
@@ -290,13 +338,15 @@ class GenerateSkillMasterTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(skill_master["skills"], ["データ分析", "データ分析基盤設計"])
+        self.assertEqual(
+            self._skill_names(skill_master), ["データ分析", "データ分析基盤設計"]
+        )
 
     def test_parse_skill_master_json_rejects_old_skill_object_format(self):
         import app
 
         with self.assertRaisesRegex(
-            ValueError, "Bedrock output 'skills' entries must be strings"
+            ValueError, "Bedrock output skill objects must contain skillName"
         ):
             app._parse_skill_master_json(
                 '{"skills":[{"skill_name":"分析","definition":"分析する能力"}]}'
@@ -337,7 +387,7 @@ class GenerateSkillMasterTest(unittest.TestCase):
             '以下です。```json\n{"skills":["データ分析"]}\n```以上です。'
         )
 
-        self.assertEqual(skill_master, {"skills": ["データ分析"]})
+        self.assertEqual(self._skill_names(skill_master), ["データ分析"])
 
     def test_parse_skill_master_json_rejects_truncated_json(self):
         import app
@@ -425,7 +475,7 @@ class GenerateSkillMasterTest(unittest.TestCase):
         self.assertNotIn("cache_control", request_content[1])
         self.assertIn("RULES_TEXT", request_content[0]["text"])
         self.assertIn('"duties": ["分析"]', request_content[1]["text"])
-        self.assertEqual(skill_master["skills"], ["スキル0"])
+        self.assertEqual(self._skill_names(skill_master), ["スキル0"])
         self.assertEqual(
             skill_master["usage"],
             {
@@ -607,6 +657,57 @@ class GenerateSkillMasterTest(unittest.TestCase):
         self.assertIn('"skills"', request_content[0]["text"])
         self.assertIn('"duties": ["分析"]', request_content[1]["text"])
         self.assertNotIn("definition", request_content[1]["text"])
+
+    def test_save_skill_master_logs_reason_and_saves_lightcast_category(self):
+        import app
+
+        saved_items = []
+
+        class BatchWriter:
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc_value, traceback):
+                return False
+
+            def put_item(self, Item):
+                saved_items.append(Item)
+
+        class Table:
+            def batch_writer(self):
+                return BatchWriter()
+
+        class DynamoDBResource:
+            def Table(self, _table_name):
+                return Table()
+
+        app.boto3.resource = lambda service_name: DynamoDBResource()
+
+        with self.assertLogs(level="INFO") as log_context:
+            saved_count = app._save_skill_master(
+                "SkillMaster",
+                "bucket",
+                "key.csv",
+                {
+                    "skills": [
+                        {
+                            "skillName": "プロジェクト管理",
+                            "category": "Business",
+                            "lightcastCategory": "Management",
+                            "classificationReason": "プロジェクト推進が主要責任のため。",
+                        }
+                    ]
+                },
+            )
+
+        self.assertEqual(saved_count, 1)
+        self.assertEqual(saved_items[0]["lightcastCategory"], "Management")
+        self.assertEqual(saved_items[0]["category"], "Business")
+        self.assertNotIn("classificationReason", saved_items[0])
+        self.assertIn(
+            "Skill classified: skillName=プロジェクト管理 lightcastCategory=Management reason=プロジェクト推進が主要責任のため。",
+            "\n".join(log_context.output),
+        )
 
 
 if __name__ == "__main__":

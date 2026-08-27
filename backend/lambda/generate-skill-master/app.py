@@ -36,7 +36,7 @@ FIXED_CONTEXT_TEMPLATE = """あなたは職務分析およびスキル体系設�
 DYNAMIC_RECORDS_TEMPLATE = """以下が今回の分析対象データです:
 {records}
 
-上記データからスキル名一覧を生成してください。
+上記データからスキル一覧を生成してください。
 """
 
 
@@ -384,20 +384,19 @@ def _parse_skill_master_json(
         _log_unexpected_bedrock_output_structure(text, data, skills, stop_reason, usage)
         raise ValueError("Bedrock output 'skills' must be an array")
 
-    normalized_skills: list[str] = []
+    normalized_skills: list[dict[str, str]] = []
     seen_skill_names: set[str] = set()
     duplicate_count = 0
     for item in skills:
-        if not isinstance(item, str):
-            raise ValueError("Bedrock output 'skills' entries must be strings")
-        skill_name = _normalize_skill_name(item)
+        skill = _normalize_skill_item(item)
+        skill_name = skill["skillName"]
         if not skill_name:
             continue
         if skill_name in seen_skill_names:
             duplicate_count += 1
             continue
         seen_skill_names.add(skill_name)
-        normalized_skills.append(skill_name)
+        normalized_skills.append(skill)
 
     skill_count = len(normalized_skills)
     if skill_count == 0:
@@ -409,6 +408,29 @@ def _parse_skill_master_json(
         )
 
     return {"skills": normalized_skills}
+
+
+def _normalize_skill_item(item: Any) -> dict[str, str]:
+    if isinstance(item, str):
+        return {
+            "skillName": _normalize_skill_name(item),
+            "category": "",
+            "lightcastCategory": "",
+            "classificationReason": "",
+        }
+
+    if not isinstance(item, dict):
+        raise ValueError("Bedrock output 'skills' entries must be strings or objects")
+
+    skill_name = _normalize_skill_name(item.get("skillName"))
+    if not skill_name:
+        raise ValueError("Bedrock output skill objects must contain skillName")
+    return {
+        "skillName": skill_name,
+        "category": _normalize_cell(item.get("category")),
+        "lightcastCategory": _normalize_cell(item.get("lightcastCategory")),
+        "classificationReason": _normalize_cell(item.get("classificationReason")),
+    }
 
 
 def _log_unexpected_bedrock_output_structure(
@@ -494,13 +516,29 @@ def _save_skill_master(
 
     with table.batch_writer() as batch:
         for skill in skill_master["skills"]:
-            skill_name = skill
+            skill_name = skill["skillName"] if isinstance(skill, dict) else skill
             skill_id = str(uuid.uuid5(uuid.NAMESPACE_URL, skill_name))
+            category = skill.get("category", "") if isinstance(skill, dict) else ""
+            lightcast_category = (
+                skill.get("lightcastCategory", "") if isinstance(skill, dict) else ""
+            )
+            classification_reason = (
+                skill.get("classificationReason", "") if isinstance(skill, dict) else ""
+            )
+
+            logger.info(
+                "Skill classified: skillName=%s lightcastCategory=%s reason=%s",
+                skill_name,
+                lightcast_category,
+                classification_reason,
+            )
 
             batch.put_item(
                 Item={
                     "skillId": skill_id,
                     "skillName": skill_name,
+                    "category": category,
+                    "lightcastCategory": lightcast_category,
                     "updatedAt": now,
                     "sourceBucket": source_bucket,
                     "sourceKey": source_key,
