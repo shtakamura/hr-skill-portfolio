@@ -41,10 +41,10 @@ class GenerateSkillMasterTest(unittest.TestCase):
                         "skillName": f"スキル{i}",
                         "category": "Business",
                         "lightcastCategory": "Management",
-                        "classificationReason": "職務内容に関連するため。",
                     }
                     for i in range(count)
-                ]
+                ],
+                "classificationSummary": "主な職務内容を基準にLightcast大分類へマッピングした。",
             },
             ensure_ascii=False,
         )
@@ -210,8 +210,13 @@ class GenerateSkillMasterTest(unittest.TestCase):
         self.assertIn("Lightcast Skill Taxonomyを、スキル名称の標準化", fixed_text)
         self.assertIn("自然な日本語のスキル名", fixed_text)
         self.assertIn(
-            "スキル名、分類、Lightcast大分類、分類理由をJSONで返す", fixed_text
+            "スキル名、分類、Lightcast大分類、および分類方針の要約をJSONで返す",
+            fixed_text,
         )
+        self.assertIn(
+            "スキルごとのclassificationReasonや理由文は生成しない", fixed_text
+        )
+        self.assertIn("classificationSummaryはスキル一覧全体の分類方針", fixed_text)
         self.assertIn("definitionは生成しない", fixed_text)
         self.assertIn("制度名、規格名、手法名、組織機能名、成果名、KPI名", fixed_text)
         self.assertIn("能力・専門性を抽出する", fixed_text)
@@ -229,7 +234,7 @@ class GenerateSkillMasterTest(unittest.TestCase):
 
         self.assertEqual(self._skill_names(skill_master), ["プロジェクト管理"])
 
-    def test_parse_skill_master_json_accepts_classification_metadata(self):
+    def test_parse_skill_master_json_accepts_classification_metadata_and_summary(self):
         import app
 
         skill_master = app._parse_skill_master_json(
@@ -240,9 +245,9 @@ class GenerateSkillMasterTest(unittest.TestCase):
                             "skillName": "プロジェクト管理",
                             "category": "Business",
                             "lightcastCategory": "Management",
-                            "classificationReason": "プロジェクト推進が主要責任のため。",
                         }
-                    ]
+                    ],
+                    "classificationSummary": "主な職務内容を基準にLightcast大分類へマッピングした。",
                 },
                 ensure_ascii=False,
             )
@@ -256,9 +261,9 @@ class GenerateSkillMasterTest(unittest.TestCase):
                         "skillName": "プロジェクト管理",
                         "category": "Business",
                         "lightcastCategory": "Management",
-                        "classificationReason": "プロジェクト推進が主要責任のため。",
                     }
-                ]
+                ],
+                "classificationSummary": "主な職務内容を基準にLightcast大分類へマッピングした。",
             },
         )
 
@@ -658,7 +663,7 @@ class GenerateSkillMasterTest(unittest.TestCase):
         self.assertIn('"duties": ["分析"]', request_content[1]["text"])
         self.assertNotIn("definition", request_content[1]["text"])
 
-    def test_save_skill_master_logs_reason_and_saves_lightcast_category(self):
+    def test_save_skill_master_logs_summary_and_saves_lightcast_category(self):
         import app
 
         saved_items = []
@@ -694,9 +699,9 @@ class GenerateSkillMasterTest(unittest.TestCase):
                             "skillName": "プロジェクト管理",
                             "category": "Business",
                             "lightcastCategory": "Management",
-                            "classificationReason": "プロジェクト推進が主要責任のため。",
                         }
-                    ]
+                    ],
+                    "classificationSummary": "主な職務内容を基準にLightcast大分類へマッピングした。",
                 },
             )
 
@@ -704,8 +709,9 @@ class GenerateSkillMasterTest(unittest.TestCase):
         self.assertEqual(saved_items[0]["lightcastCategory"], "Management")
         self.assertEqual(saved_items[0]["category"], "Business")
         self.assertNotIn("classificationReason", saved_items[0])
+        self.assertNotIn("classificationSummary", saved_items[0])
         self.assertIn(
-            "Skill classified: skillName=プロジェクト管理 lightcastCategory=Management reason=プロジェクト推進が主要責任のため。",
+            "Skill classification summary: 主な職務内容を基準にLightcast大分類へマッピングした。",
             "\n".join(log_context.output),
         )
 
