@@ -419,7 +419,7 @@ def _normalize_skill_item(item: Any) -> dict[str, str]:
         return {
             "skillName": _normalize_skill_name(item),
             "category": "",
-            "lightcastCategory": "",
+            "subcategory": "",
         }
 
     if not isinstance(item, dict):
@@ -431,7 +431,7 @@ def _normalize_skill_item(item: Any) -> dict[str, str]:
     return {
         "skillName": skill_name,
         "category": _normalize_cell(item.get("category")),
-        "lightcastCategory": _normalize_cell(item.get("lightcastCategory")),
+        "subcategory": _normalize_cell(item.get("subcategory")),
     }
 
 
@@ -525,8 +525,8 @@ def _save_skill_master(
             skill_name = skill["skillName"] if isinstance(skill, dict) else skill
             skill_id = str(uuid.uuid5(uuid.NAMESPACE_URL, skill_name))
             category = skill.get("category", "") if isinstance(skill, dict) else ""
-            lightcast_category = (
-                skill.get("lightcastCategory", "") if isinstance(skill, dict) else ""
+            subcategory = (
+                skill.get("subcategory", "") if isinstance(skill, dict) else ""
             )
 
             batch.put_item(
@@ -534,7 +534,7 @@ def _save_skill_master(
                     "skillId": skill_id,
                     "skillName": skill_name,
                     "category": category,
-                    "lightcastCategory": lightcast_category,
+                    "subcategory": subcategory,
                     "updatedAt": now,
                     "sourceBucket": source_bucket,
                     "sourceKey": source_key,

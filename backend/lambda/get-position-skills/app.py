@@ -98,7 +98,8 @@ def _valid_skill_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for item in items:
         skill_id = _normalize_id(item.get("skillId"))
         skill_name = _normalize_text(item.get("skillName"))
-        lightcast_category = _normalize_text(item.get("lightcastCategory"))
+        category = _normalize_text(item.get("category"))
+        subcategory = _normalize_text(item.get("subcategory"))
         level = _parse_level(item.get("level"))
         if not skill_id or not skill_name or level is None:
             logger.warning(
@@ -114,7 +115,8 @@ def _valid_skill_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             {
                 "skillId": skill_id,
                 "skillName": skill_name,
-                "lightcastCategory": lightcast_category,
+                "category": category,
+                "subcategory": subcategory,
                 "level": level,
             }
         )
@@ -126,45 +128,52 @@ def _top_skills(skills: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if not positive_skills:
         return []
 
-    highest_skill = sorted(
-        positive_skills,
-        key=lambda skill: (-skill["level"], skill["skillName"], skill["skillId"]),
-    )[0]
-    representative_category = _representative_lightcast_category(skills)
-    category_skills = sorted(
-        [
-            skill
-            for skill in positive_skills
-            if skill.get("lightcastCategory", "") == representative_category
-        ],
-        key=lambda skill: (-skill["level"], skill["skillName"], skill["skillId"]),
+    max_level = max(skill["level"] for skill in positive_skills)
+    highest_skills = sorted(
+        [skill for skill in positive_skills if skill["level"] == max_level],
+        key=lambda skill: (skill["skillName"], skill["skillId"]),
     )
 
     selected: list[dict[str, Any]] = []
     seen_skill_ids: set[str] = set()
-    for skill in [highest_skill, *category_skills]:
+    for skill in highest_skills:
         if skill["skillId"] in seen_skill_ids:
             continue
         seen_skill_ids.add(skill["skillId"])
         selected.append(skill)
         if len(selected) >= MAX_SKILL_COUNT:
-            break
-    return selected
+            return sorted(selected, key=lambda item: item["skillId"])
+
+    for category in _categories_by_average_level(positive_skills):
+        category_skills = sorted(
+            [
+                skill
+                for skill in positive_skills
+                if skill.get("category", "") == category
+            ],
+            key=lambda skill: (-skill["level"], skill["skillName"], skill["skillId"]),
+        )
+        for skill in category_skills:
+            if skill["skillId"] in seen_skill_ids:
+                continue
+            seen_skill_ids.add(skill["skillId"])
+            selected.append(skill)
+            if len(selected) >= MAX_SKILL_COUNT:
+                return sorted(selected, key=lambda item: item["skillId"])
+    return sorted(selected, key=lambda item: item["skillId"])
 
 
-def _representative_lightcast_category(skills: list[dict[str, Any]]) -> str:
+def _categories_by_average_level(skills: list[dict[str, Any]]) -> list[str]:
     category_levels: dict[str, list[int]] = {}
     for skill in skills:
-        category = skill.get("lightcastCategory", "")
+        category = skill.get("category", "")
         category_levels.setdefault(category, []).append(skill["level"])
-    if not category_levels:
-        return ""
     averages = [
         (sum(levels) / len(levels), category)
         for category, levels in category_levels.items()
     ]
     averages.sort(key=lambda item: (-item[0], item[1]))
-    return averages[0][1]
+    return [category for _average, category in averages]
 
 
 def _parse_level(value: Any) -> int | None:

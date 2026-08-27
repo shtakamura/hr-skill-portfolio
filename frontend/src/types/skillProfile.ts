@@ -3,7 +3,8 @@ export type SkillLevel = {
   skillName: string;
   level: number;
   maxLevel: number;
-  lightcastCategory?: string;
+  category?: string;
+  subcategory?: string;
 };
 
 export type SkillProfileDataSource = "api" | "sample";

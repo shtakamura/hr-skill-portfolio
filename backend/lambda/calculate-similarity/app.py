@@ -123,6 +123,8 @@ def _group_position_skills(
         position_id = _normalize_id(item.get("positionId"))
         skill_id = _normalize_id(item.get("skillId"))
         skill_name = _normalize_text(item.get("skillName"))
+        category = _normalize_text(item.get("category"))
+        subcategory = _normalize_text(item.get("subcategory"))
         organization_name = _normalize_text(item.get("organizationName"))
         business_unit_name = _normalize_text(item.get("businessUnitName"))
         level = _parse_level(item.get("level"))
@@ -137,6 +139,8 @@ def _group_position_skills(
             {
                 "skillId": skill_id,
                 "skillName": skill_name,
+                "category": category,
+                "subcategory": subcategory,
                 "organizationName": organization_name,
                 "businessUnitName": business_unit_name,
                 "level": level,
@@ -171,55 +175,69 @@ def _core_skill_ids(skills: list[dict[str, Any]]) -> set[str]:
 
 
 def _chart_axis(skills: list[dict[str, Any]]) -> list[dict[str, str]]:
-    """選択ポジションの最高スキルと代表Lightcast大分類から共通チャート軸を作る。"""
+    """最高スキル群と平均levelが高いtaxonomy大項目から共通チャート軸を作る。"""
     positive_skills = [skill for skill in skills if skill["level"] > 0]
     if not positive_skills:
         return []
 
-    highest_skill = sorted(
-        positive_skills,
-        key=lambda skill: (-skill["level"], skill["skillName"], skill["skillId"]),
-    )[0]
-    representative_category = _representative_lightcast_category(skills)
-    category_skills = sorted(
-        [
-            skill
-            for skill in positive_skills
-            if skill.get("lightcastCategory", "") == representative_category
-        ],
-        key=lambda skill: (-skill["level"], skill["skillName"], skill["skillId"]),
+    max_level = max(skill["level"] for skill in positive_skills)
+    highest_skills = sorted(
+        [skill for skill in positive_skills if skill["level"] == max_level],
+        key=lambda skill: (skill["skillName"], skill["skillId"]),
     )
 
     selected: list[dict[str, Any]] = []
     seen_skill_ids: set[str] = set()
-    for skill in [highest_skill, *category_skills]:
+    for skill in highest_skills:
         if skill["skillId"] in seen_skill_ids:
             continue
         seen_skill_ids.add(skill["skillId"])
         selected.append(skill)
         if len(selected) >= MAX_CHART_SKILL_COUNT:
-            break
+            return _format_chart_axis(selected)
 
+    for category in _categories_by_average_level(positive_skills):
+        category_skills = sorted(
+            [
+                skill
+                for skill in positive_skills
+                if skill.get("category", "") == category
+            ],
+            key=lambda skill: (-skill["level"], skill["skillName"], skill["skillId"]),
+        )
+        for skill in category_skills:
+            if skill["skillId"] in seen_skill_ids:
+                continue
+            seen_skill_ids.add(skill["skillId"])
+            selected.append(skill)
+            if len(selected) >= MAX_CHART_SKILL_COUNT:
+                return _format_chart_axis(selected)
+
+    return _format_chart_axis(selected)
+
+
+def _format_chart_axis(skills: list[dict[str, Any]]) -> list[dict[str, str]]:
+    sorted_skills = sorted(skills, key=lambda item: item["skillId"])
     return [
         {
             "skillId": skill["skillId"],
             "skillName": skill["skillName"],
         }
-        for skill in selected
+        for skill in sorted_skills
     ]
 
 
-def _representative_lightcast_category(skills: list[dict[str, Any]]) -> str:
+def _categories_by_average_level(skills: list[dict[str, Any]]) -> list[str]:
     category_levels: dict[str, list[int]] = {}
     for skill in skills:
-        category = skill.get("lightcastCategory", "")
+        category = skill.get("category", "")
         category_levels.setdefault(category, []).append(skill["level"])
     averages = [
         (sum(levels) / len(levels), category)
         for category, levels in category_levels.items()
     ]
     averages.sort(key=lambda item: (-item[0], item[1]))
-    return averages[0][1] if averages else ""
+    return [category for _average, category in averages]
 
 
 def _chart_values(

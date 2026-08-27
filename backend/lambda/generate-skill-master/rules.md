@@ -5,16 +5,7 @@
 - スキル数を増やすこと自体を目的としない
 - 部署名、役職名、ポジション名、タスク名、成果物名をそのままスキル名にしない
 - 製品名やツール名は必要に応じて汎用的な能力へ抽象化する
-- 意味的に重複するスキルは可能な限り統合する
-- 表記が異なっていても、本質的に同じ能力を示す場合は統合する
-- 既存のスキルで職務を説明できる場合は、類似スキルを追加しない
 - 日本語で簡潔なスキル名を付ける
-- 有効なJSONのみを返す
-- JSON前後の説明文やMarkdownコードフェンスを付けない
-- トップレベル項目はskillsだけとする
-- skillsは必ずJSON配列とする
-- skill_masterやresultなどのラッパーを追加しない
-- 同一またはほぼ同一のスキル名を複数返さない
 - スキルが1件の場合もskills配列を使用する
 
 ## Lightcastの利用方針
@@ -24,18 +15,6 @@
 - 職務に近いLightcastサブカテゴリがある場合は、その概念と粒度に整合する日本語のスキル名を優先する
 - Lightcastに完全一致する概念がない場合は、職務内容を適切に表現するスキル名を生成してよい
 - ただし、Lightcastと同程度の抽象度・粒度で表現する
-- Lightcastの英語カテゴリ名・サブカテゴリ名を、そのまま出力してはならない
-- 例: Project Management -> プロジェクト管理、Data Analysis -> データ分析、Risk Management -> リスク管理、Customer Relationship Management -> 顧客関係管理、Process Improvement and Optimization -> 業務改善・最適化
-- 成果指標、KPI、目標、結果、制度名、規格名、プロジェクト名、タスク名、製品名、ツール名を、そのままスキル名にしてはならない
-- 能力・専門性を表す自然な日本語のスキル名へ抽象化する
-- Lightcastに対応する概念が存在する場合、制度名、規格名、手法名、組織機能名、成果名、KPI名をそのままスキル名にしない
-- 入力CSVに制度名や成果名が記載されていても、その制度や成果を実現するために必要な能力・専門性を抽出する
-- Lightcastサブカテゴリと同程度の粒度を持つ、職務横断で比較可能な日本語のスキル名へ抽象化する
-- 入力された用語を単に言い換えるのではなく、評価対象となる能力を表現する
-- 業務上、制度固有の専門性を明確に区別する必要がある場合のみ、制度や規格を含む名称を許容する
-- 過度に抽象化して、元の職務内容との関係が失われないようにする
-
-
 
 ## 重複抑制
 
@@ -50,13 +29,15 @@
 2. Lightcast Skill Taxonomyを参照し、スキル名の粒度と重複を調整する
 3. 意味的に重複する候補を統合する
 4. 組織横断で比較可能な自然な日本語のスキル名へ整理する
-5. スキル名、分類、Lightcast大分類、および分類方針の要約をJSONで返す
+5. スキル名、taxonomy大項目、taxonomyサブ項目、および分類方針の要約をJSONで返す
 
 ## JSON出力契約
 
 - トップレベル項目はskillsとclassificationSummaryだけとする
 - skillsは必ずJSON配列とする
-- skills配列の各要素はskillName、category、lightcastCategoryを持つオブジェクトとする
+- skills配列の各要素はskillName、category、subcategoryを持つオブジェクトとする
+- categoryにはLightcast taxonomyの大項目を設定する
+- subcategoryにはLightcast taxonomyのサブ項目を設定する
 - スキルごとのclassificationReasonや理由文は生成しない
 - classificationSummaryはスキル一覧全体の分類方針を1〜2文、最大200文字程度で簡潔に表す
 - definitionは生成しない
@@ -68,8 +49,8 @@
   "skills": [
     {
       "skillName": "プロジェクト管理",
-      "category": "Business",
-      "lightcastCategory": "Management"
+      "category": "ビジネス",
+      "subcategory": "プロジェクトマネジメント"
     }
   ],
   "classificationSummary": "主な職務内容と責任範囲を基準にLightcast大分類へマッピングした。"
