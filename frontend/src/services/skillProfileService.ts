@@ -41,7 +41,7 @@ export const mapApiResponseToProfile = (
   response: PositionSkillsApiResponse,
 ): PositionSkillProfile => {
   const validSkills = response.skills
-    .filter((skill) => skill.skillId && skill.skillName && isValidLevel(skill.level))
+    .filter((skill) => skill.skillId && skill.skillName && isValidLevel(skill.level) && skill.level > 0)
     .slice(0, 10)
     .map((skill) => ({
       skillId: skill.skillId,
@@ -50,7 +50,7 @@ export const mapApiResponseToProfile = (
       maxLevel: 5,
     }));
 
-  if (!response.dataFound || validSkills.length === 0) {
+  if (!response.dataFound) {
     return sampleProfileForPosition(position);
   }
 

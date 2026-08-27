@@ -98,6 +98,7 @@ class GetPositionSkillsTest(unittest.TestCase):
             }
             for index, (skill_name, level) in enumerate(
                 [
+                    ("Z", 0),
                     ("K", 1),
                     ("B", 5),
                     ("A", 5),
@@ -119,6 +120,26 @@ class GetPositionSkillsTest(unittest.TestCase):
         self.assertEqual(body["skills"][0]["skillName"], "A")
         self.assertEqual(body["skills"][1]["skillName"], "B")
         self.assertNotIn("K", [skill["skillName"] for skill in body["skills"]])
+        self.assertNotIn("Z", [skill["skillName"] for skill in body["skills"]])
+
+    def test_level_zero_records_are_data_found_but_not_chart_skills(self):
+        body = app._build_response(
+            [
+                {
+                    "positionId": "POS00005648",
+                    "skillId": "s0",
+                    "organizationName": "組織",
+                    "positionName": "ポジション",
+                    "skillName": "不要スキル",
+                    "level": 0,
+                }
+            ],
+            "POS00005648",
+        )
+
+        self.assertTrue(body["dataFound"])
+        self.assertEqual(body["validSkillCount"], 1)
+        self.assertEqual(body["skills"], [])
 
     def test_keeps_less_than_10_valid_skills(self):
         body = app._build_response(_items("POS00005648")[:3], "POS00005648")

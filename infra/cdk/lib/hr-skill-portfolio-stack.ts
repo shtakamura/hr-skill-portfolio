@@ -115,7 +115,8 @@ export class HrSkillPortfolioStack extends cdk.Stack {
         SKILL_MASTER_TABLE_NAME: skillMasterTable.tableName,
         POSITION_SKILL_TABLE_NAME: positionSkillTable.tableName,
         ORGANIZATION_MASTER_TABLE_NAME: organizationMasterTable.tableName,
-        POSITION_MASTER_TABLE_NAME: positionMasterTable.tableName
+        POSITION_MASTER_TABLE_NAME: positionMasterTable.tableName,
+        POSITION_SKILL_BATCH_SIZE: "50"
       }
     });
 

@@ -12,23 +12,30 @@ from typing import Any
 from urllib.parse import unquote_plus
 
 import boto3
+from boto3.dynamodb.conditions import Key
 from botocore.exceptions import BotoCoreError, ClientError
 
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-CANDIDATE_RULES_PATH = Path(__file__).resolve().parent / "candidate_rules.md"
 LEVEL_RULES_PATH = Path(__file__).resolve().parent / "level_rules.md"
-
-CANDIDATE_CONTEXT_TEMPLATE = """{rules}"""
-
-CANDIDATE_DYNAMIC_TEMPLATE = """以下の入力から候補スキルを抽出してください。
-{payload}
-"""
+DEFAULT_POSITION_SKILL_BATCH_SIZE = 50
+BEDROCK_MAX_TOKENS = 1000
 
 LEVEL_CONTEXT_TEMPLATE = """{rules}"""
 
-LEVEL_DYNAMIC_TEMPLATE = """以下の入力から候補スキルのレベルを判定してください。
+LEVEL_DYNAMIC_TEMPLATE = """以下の入力から、skills配列とまったく同じ順番でlevels配列を返してください。
+
+重要:
+- skills配列を並べ替えない
+- スキルを追加しない
+- スキルを削除しない
+- スキルを統合しない
+- 各入力スキルに対し、0〜5の整数レベルを必ず1件返す
+- n件のskillsを受け取った場合、n件のlevelsを返す
+- 出力はJSONオブジェクト {{"levels":[...]}} のみとする
+- skillId、skillName、positionId、追加の説明項目を出力しない
+
 {payload}
 """
 
@@ -45,6 +52,7 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     position_skill_table_name = os.environ.get("POSITION_SKILL_TABLE_NAME")
     organization_master_table_name = os.environ.get("ORGANIZATION_MASTER_TABLE_NAME")
     position_master_table_name = os.environ.get("POSITION_MASTER_TABLE_NAME")
+    batch_size_text = os.environ.get("POSITION_SKILL_BATCH_SIZE")
 
     if (
         not model_id
@@ -58,6 +66,7 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         return _error_response(500, "Required environment variables are missing")
 
     try:
+        batch_size = _load_batch_size(batch_size_text)
         source_bucket, source_key = _resolve_s3_source(event, bucket_name)
         if not source_key.startswith(POSITION_INPUT_PREFIX):
             raise ValueError("Input CSV must be under position-input/")
@@ -73,35 +82,19 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
             positions,
         )
 
-        skill_master = _load_skill_master(skill_master_table_name)
-        if not skill_master:
-            return _error_response(400, "SkillMaster is empty")
-
-        candidate_rules = _load_candidate_rules()
+        skill_master = _sort_skill_master(_load_skill_master(skill_master_table_name))
         level_rules = _load_level_rules()
+        skill_batches = _split_skill_batches(skill_master, batch_size)
 
-        total_saved_count = 0
-        total_input_tokens = 0
-        total_output_tokens = 0
+        total_evaluated_count = 0
+        total_usage = _empty_usage()
 
         for position in positions:
-            candidate_result = _extract_candidate_skills(
-                model_id, candidate_rules, position, skill_master
+            evaluation = _evaluate_all_skill_levels(
+                model_id, level_rules, position, skill_batches
             )
-            candidates = _validate_candidate_skills(
-                candidate_result["candidate_skills"], skill_master
-            )
-
-            if candidates:
-                level_result = _evaluate_skill_levels(
-                    model_id, level_rules, position, candidates
-                )
-                skill_levels = _validate_skill_levels(
-                    position["positionId"], level_result["skill_levels"], candidates
-                )
-            else:
-                level_result = _empty_bedrock_result({"skill_levels": []})
-                skill_levels = []
+            skill_levels = evaluation["skillLevels"]
+            _validate_complete_skill_levels(skill_master, skill_levels)
 
             saved_count = _save_position_skill_levels(
                 position_skill_table_name,
@@ -110,62 +103,49 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
                 position,
                 skill_levels,
             )
-            total_saved_count += saved_count
-
-            candidate_usage = candidate_result["usage"]
-            level_usage = level_result["usage"]
-            position_input_tokens = (
-                candidate_usage["inputTokens"] + level_usage["inputTokens"]
+            _delete_stale_position_skill_levels(
+                position_skill_table_name, position["positionId"], skill_master
             )
-            position_output_tokens = (
-                candidate_usage["outputTokens"] + level_usage["outputTokens"]
-            )
-            total_input_tokens += position_input_tokens
-            total_output_tokens += position_output_tokens
+            total_evaluated_count += saved_count
+            _add_usage(total_usage, evaluation["usage"])
 
             logger.info(
-                "Position skill evaluation usage: positionId=%s "
-                "candidate_input_tokens=%s candidate_output_tokens=%s "
-                "candidate_cache_creation_input_tokens=%s "
-                "candidate_cache_read_input_tokens=%s candidate_stop_reason=%s "
-                "level_input_tokens=%s level_output_tokens=%s "
-                "level_cache_creation_input_tokens=%s level_cache_read_input_tokens=%s "
-                "level_stop_reason=%s candidate_count=%s evaluated_count=%s "
-                "totalInputTokens=%s totalOutputTokens=%s totalTokens=%s",
+                "Position skill level usage: positionId=%s skillMasterCount=%s "
+                "batchCount=%s evaluatedCount=%s inputTokens=%s outputTokens=%s "
+                "totalTokens=%s cacheCreationInputTokens=%s cacheReadInputTokens=%s "
+                "stopReasons=%s",
                 position["positionId"],
-                candidate_usage["inputTokens"],
-                candidate_usage["outputTokens"],
-                candidate_usage["cacheCreationInputTokens"],
-                candidate_usage["cacheReadInputTokens"],
-                candidate_result["stopReason"],
-                level_usage["inputTokens"],
-                level_usage["outputTokens"],
-                level_usage["cacheCreationInputTokens"],
-                level_usage["cacheReadInputTokens"],
-                level_result["stopReason"],
-                len(candidates),
+                len(skill_master),
+                evaluation["usage"]["batchCount"],
                 len(skill_levels),
-                position_input_tokens,
-                position_output_tokens,
-                position_input_tokens + position_output_tokens,
+                evaluation["usage"]["inputTokens"],
+                evaluation["usage"]["outputTokens"],
+                evaluation["usage"]["totalTokens"],
+                evaluation["usage"]["cacheCreationInputTokens"],
+                evaluation["usage"]["cacheReadInputTokens"],
+                ",".join(evaluation["stopReasons"]),
             )
 
         return {
             "statusCode": 200,
             "body": json.dumps(
                 {
-                    "message": "Position skill levels evaluated successfully",
-                    "position_count": len(positions),
-                    "saved_count": total_saved_count,
+                    "message": "Position skill levels evaluated and saved successfully",
+                    "positionCount": len(positions),
+                    "skillMasterCount": len(skill_master),
+                    "evaluatedCount": total_evaluated_count,
                     "organization_saved_count": master_saved_counts[
                         "organizationSavedCount"
                     ],
                     "position_saved_count": master_saved_counts["positionSavedCount"],
-                    "source": {"bucket": source_bucket, "key": source_key},
                     "usage": {
-                        "totalInputTokens": total_input_tokens,
-                        "totalOutputTokens": total_output_tokens,
-                        "totalTokens": total_input_tokens + total_output_tokens,
+                        "inputTokens": total_usage["inputTokens"],
+                        "outputTokens": total_usage["outputTokens"],
+                        "totalTokens": total_usage["totalTokens"],
+                        "cacheCreationInputTokens": total_usage[
+                            "cacheCreationInputTokens"
+                        ],
+                        "cacheReadInputTokens": total_usage["cacheReadInputTokens"],
                     },
                 },
                 ensure_ascii=False,
@@ -182,12 +162,22 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         return _error_response(500, f"Unexpected error: {str(err)}")
 
 
-def _load_candidate_rules(path: Path = CANDIDATE_RULES_PATH) -> str:
-    return _load_text_file(path, "candidate_rules.md")
-
-
 def _load_level_rules(path: Path = LEVEL_RULES_PATH) -> str:
     return _load_text_file(path, "level_rules.md")
+
+
+def _load_batch_size(value: str | None) -> int:
+    if value is None or not value.strip():
+        return DEFAULT_POSITION_SKILL_BATCH_SIZE
+    try:
+        batch_size = int(value)
+    except ValueError as err:
+        raise ValueError(
+            "POSITION_SKILL_BATCH_SIZE must be a positive integer"
+        ) from err
+    if batch_size < 1:
+        raise ValueError("POSITION_SKILL_BATCH_SIZE must be a positive integer")
+    return batch_size
 
 
 def _load_text_file(path: Path, label: str) -> str:
@@ -401,107 +391,150 @@ def _load_skill_master(table_name: str) -> list[dict[str, str]]:
     table = dynamodb.Table(table_name)
     items: list[dict[str, str]] = []
     scan_kwargs: dict[str, Any] = {}
+    seen_skill_ids: set[str] = set()
 
     while True:
         response = table.scan(**scan_kwargs)
         for item in response.get("Items", []):
             skill_id = _normalize_cell(item.get("skillId"))
             skill_name = _normalize_cell(item.get("skillName"))
-            if skill_id and skill_name:
-                items.append({"skillId": skill_id, "skillName": skill_name})
+            if not skill_id or not skill_name:
+                continue
+            if skill_id in seen_skill_ids:
+                raise ValueError(f"Duplicate skillId found in SkillMaster: {skill_id}")
+            seen_skill_ids.add(skill_id)
+            items.append({"skillId": skill_id, "skillName": skill_name})
         last_key = response.get("LastEvaluatedKey")
         if not last_key:
             break
         scan_kwargs["ExclusiveStartKey"] = last_key
 
+    if not items:
+        raise ValueError("SkillMaster is empty")
+
     logger.info("Loaded skill master count: %s", len(items))
     return items
 
 
-def _extract_candidate_skills(
+def _sort_skill_master(skill_master: list[dict[str, str]]) -> list[dict[str, str]]:
+    return sorted(skill_master, key=lambda skill: skill["skillId"])
+
+
+def _split_skill_batches(
+    skill_master: list[dict[str, str]], batch_size: int
+) -> list[list[dict[str, str]]]:
+    return [
+        skill_master[index : index + batch_size]
+        for index in range(0, len(skill_master), batch_size)
+    ]
+
+
+def _evaluate_all_skill_levels(
     model_id: str,
     rules: str,
     position: dict[str, Any],
-    skill_master: list[dict[str, str]],
+    skill_batches: list[list[dict[str, str]]],
 ) -> dict[str, Any]:
-    payload = {
-        "position": position,
-        "skill_master": [skill["skillName"] for skill in skill_master],
+    all_skill_levels: list[dict[str, Any]] = []
+    usage = _empty_usage()
+    stop_reasons: list[str] = []
+
+    for batch_index, skill_batch in enumerate(skill_batches, start=1):
+        result = _evaluate_skill_batch(model_id, rules, position, skill_batch)
+        all_skill_levels.extend(result["skillLevels"])
+        _add_usage(usage, result["usage"])
+        usage["batchCount"] += 1
+        stop_reasons.append(result["stopReason"])
+        logger.info(
+            "Position skill level batch usage: positionId=%s batchNumber=%s "
+            "batchSize=%s inputTokens=%s outputTokens=%s "
+            "cacheCreationInputTokens=%s cacheReadInputTokens=%s stopReason=%s",
+            position["positionId"],
+            batch_index,
+            len(skill_batch),
+            result["usage"]["inputTokens"],
+            result["usage"]["outputTokens"],
+            result["usage"]["cacheCreationInputTokens"],
+            result["usage"]["cacheReadInputTokens"],
+            result["stopReason"],
+        )
+
+    usage["evaluatedCount"] = len(all_skill_levels)
+    return {
+        "skillLevels": all_skill_levels,
+        "usage": usage,
+        "stopReasons": stop_reasons,
     }
-    content = _build_bedrock_content(
-        CANDIDATE_CONTEXT_TEMPLATE.format(rules=rules),
-        CANDIDATE_DYNAMIC_TEMPLATE.format(
-            payload=json.dumps(payload, ensure_ascii=False)
-        ),
-    )
-    return _invoke_bedrock(model_id, content, _parse_candidate_skills_json)
 
 
-def _validate_candidate_skills(
-    candidate_skill_names: list[str], skill_master: list[dict[str, str]]
-) -> list[dict[str, str]]:
-    skill_by_name = {skill["skillName"]: skill for skill in skill_master}
-    candidates: list[dict[str, str]] = []
-    seen: set[str] = set()
-
-    for value in candidate_skill_names:
-        skill_name = _normalize_cell(value)
-        if not skill_name or skill_name in seen:
-            continue
-        skill = skill_by_name.get(skill_name)
-        if skill is None:
-            continue
-        seen.add(skill_name)
-        candidates.append(skill)
-
-    return candidates
-
-
-def _evaluate_skill_levels(
+def _evaluate_skill_batch(
     model_id: str,
     rules: str,
     position: dict[str, Any],
-    candidate_skills: list[dict[str, str]],
+    skill_batch: list[dict[str, str]],
 ) -> dict[str, Any]:
     payload = {
         "position": position,
-        "candidate_skills": [skill["skillName"] for skill in candidate_skills],
+        "skills": [skill["skillName"] for skill in skill_batch],
     }
     content = _build_bedrock_content(
         LEVEL_CONTEXT_TEMPLATE.format(rules=rules),
         LEVEL_DYNAMIC_TEMPLATE.format(payload=json.dumps(payload, ensure_ascii=False)),
     )
-    return _invoke_bedrock(model_id, content, _parse_skill_levels_json)
+    result = _invoke_bedrock(
+        model_id,
+        content,
+        lambda text: _parse_levels_json(text, expected_count=len(skill_batch)),
+    )
+    return {
+        "skillLevels": _restore_skill_levels(skill_batch, result["levels"]),
+        "usage": result["usage"],
+        "stopReason": result["stopReason"],
+    }
 
 
-def _validate_skill_levels(
-    position_id: str,
-    skill_levels: list[dict[str, Any]],
-    candidate_skills: list[dict[str, str]],
+def _restore_skill_levels(
+    skill_batch: list[dict[str, str]], levels: list[int]
 ) -> list[dict[str, Any]]:
-    skill_by_name = {skill["skillName"]: skill for skill in candidate_skills}
-    validated: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    if len(skill_batch) != len(levels):
+        raise ValueError("levels count must match skill batch count before restore")
+    return [
+        {"skillId": skill["skillId"], "skillName": skill["skillName"], "level": level}
+        for skill, level in zip(skill_batch, levels)
+    ]
 
-    for item in skill_levels:
-        skill_name = _normalize_cell(item.get("skill_name"))
-        if not skill_name or skill_name in seen:
-            continue
-        skill = skill_by_name.get(skill_name)
-        if skill is None:
-            continue
-        level = item.get("level")
+
+def _merge_batch_results(
+    batch_results: list[list[dict[str, Any]]],
+) -> list[dict[str, Any]]:
+    merged: list[dict[str, Any]] = []
+    for batch_result in batch_results:
+        merged.extend(batch_result)
+    return merged
+
+
+def _validate_complete_skill_levels(
+    skill_master: list[dict[str, str]], skill_levels: list[dict[str, Any]]
+) -> None:
+    expected_skill_ids = [skill["skillId"] for skill in skill_master]
+    actual_skill_ids = [skill["skillId"] for skill in skill_levels]
+    if len(actual_skill_ids) != len(expected_skill_ids):
+        raise ValueError("Evaluated skill count must match SkillMaster count")
+    if len(actual_skill_ids) != len(set(actual_skill_ids)):
+        raise ValueError("Evaluated skill levels contain duplicate skillId")
+    if actual_skill_ids != expected_skill_ids:
+        raise ValueError("Evaluated skillIds must match SkillMaster skillIds in order")
+    for skill_level in skill_levels:
+        level = skill_level.get("level")
         if (
             isinstance(level, bool)
             or not isinstance(level, int)
             or level < 0
             or level > 5
         ):
-            raise ValueError(f"Invalid level for position {position_id}: {skill_name}")
-        seen.add(skill_name)
-        validated.append({**skill, "level": level})
-
-    return validated
+            raise ValueError(
+                "Evaluated skill levels must contain only integers from 0 to 5"
+            )
 
 
 def _save_position_skill_levels(
@@ -538,6 +571,43 @@ def _save_position_skill_levels(
     return count
 
 
+def _delete_stale_position_skill_levels(
+    table_name: str, position_id: str, skill_master: list[dict[str, str]]
+) -> int:
+    dynamodb = boto3.resource("dynamodb")
+    table = dynamodb.Table(table_name)
+    valid_skill_ids = {skill["skillId"] for skill in skill_master}
+    stale_items: list[dict[str, str]] = []
+    query_kwargs: dict[str, Any] = {
+        "KeyConditionExpression": Key("positionId").eq(position_id)
+    }
+
+    while True:
+        response = table.query(**query_kwargs)
+        for item in response.get("Items", []):
+            skill_id = _normalize_cell(item.get("skillId"))
+            if skill_id and skill_id not in valid_skill_ids:
+                stale_items.append({"positionId": position_id, "skillId": skill_id})
+        last_key = response.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        query_kwargs["ExclusiveStartKey"] = last_key
+
+    if not stale_items:
+        return 0
+
+    with table.batch_writer() as batch:
+        for key in stale_items:
+            batch.delete_item(Key=key)
+
+    logger.info(
+        "Deleted stale PositionSkill items: positionId=%s deletedCount=%s",
+        position_id,
+        len(stale_items),
+    )
+    return len(stale_items)
+
+
 def _build_bedrock_content(rules: str, dynamic_payload: str) -> list[dict[str, Any]]:
     return [
         {
@@ -558,7 +628,7 @@ def _invoke_bedrock(
     bedrock = boto3.client("bedrock-runtime")
     request_body = {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 3000,
+        "max_tokens": BEDROCK_MAX_TOKENS,
         "messages": [{"role": "user", "content": content}],
     }
     response = bedrock.invoke_model(
@@ -586,18 +656,24 @@ def _invoke_bedrock(
     return parsed
 
 
-def _empty_bedrock_result(data: dict[str, Any]) -> dict[str, Any]:
+def _empty_usage() -> dict[str, int]:
     return {
-        **data,
-        "usage": {
-            "inputTokens": 0,
-            "outputTokens": 0,
-            "totalTokens": 0,
-            "cacheCreationInputTokens": 0,
-            "cacheReadInputTokens": 0,
-        },
-        "stopReason": "",
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "totalTokens": 0,
+        "cacheCreationInputTokens": 0,
+        "cacheReadInputTokens": 0,
+        "batchCount": 0,
+        "evaluatedCount": 0,
     }
+
+
+def _add_usage(total: dict[str, int], usage: dict[str, int]) -> None:
+    total["inputTokens"] += usage["inputTokens"]
+    total["outputTokens"] += usage["outputTokens"]
+    total["totalTokens"] = total["inputTokens"] + total["outputTokens"]
+    total["cacheCreationInputTokens"] += usage["cacheCreationInputTokens"]
+    total["cacheReadInputTokens"] += usage["cacheReadInputTokens"]
 
 
 def _extract_bedrock_usage(payload: dict[str, Any]) -> dict[str, int]:
@@ -659,40 +735,31 @@ def _extract_bedrock_text(payload: dict[str, Any]) -> str:
     raise ValueError("Unable to extract text from Bedrock response")
 
 
-def _parse_candidate_skills_json(text: str) -> dict[str, Any]:
+def _parse_levels_json(text: str, expected_count: int) -> dict[str, Any]:
     data = _extract_json_object(text)
-    candidate_skills = data.get("candidate_skills") if isinstance(data, dict) else None
-    if not isinstance(candidate_skills, list):
-        raise ValueError("Bedrock output must contain candidate_skills array")
+    if not isinstance(data, dict):
+        raise ValueError("Bedrock output must be a JSON object")
+    if set(data.keys()) != {"levels"}:
+        raise ValueError("Bedrock output must contain only levels")
+    levels = data.get("levels")
+    if not isinstance(levels, list):
+        raise ValueError("Bedrock output levels must be an array")
+    if len(levels) != expected_count:
+        raise ValueError("Bedrock output levels count must match skill batch count")
 
-    normalized: list[str] = []
-    seen: set[str] = set()
-    for item in candidate_skills:
-        if not isinstance(item, str):
-            raise ValueError("candidate_skills entries must be strings")
-        skill_name = _normalize_cell(item)
-        if skill_name and skill_name not in seen:
-            seen.add(skill_name)
-            normalized.append(skill_name)
-    return {"candidate_skills": normalized}
-
-
-def _parse_skill_levels_json(text: str) -> dict[str, Any]:
-    data = _extract_json_object(text)
-    skill_levels = data.get("skill_levels") if isinstance(data, dict) else None
-    if not isinstance(data, dict) or not isinstance(skill_levels, list):
-        raise ValueError("Bedrock output must contain skill_levels array")
-
-    parsed_levels: list[dict[str, Any]] = []
-    for item in skill_levels:
-        if not isinstance(item, dict):
-            raise ValueError("skill_levels entries must be objects")
-        skill_name = _normalize_cell(item.get("skill_name"))
-        level = item.get("level")
-        if not skill_name:
-            continue
-        parsed_levels.append({"skill_name": skill_name, "level": level})
-    return {"skill_levels": parsed_levels}
+    parsed_levels: list[int] = []
+    for level in levels:
+        if (
+            isinstance(level, bool)
+            or not isinstance(level, int)
+            or level < 0
+            or level > 5
+        ):
+            raise ValueError(
+                "Bedrock output levels must contain only integers from 0 to 5"
+            )
+        parsed_levels.append(level)
+    return {"levels": parsed_levels}
 
 
 def _extract_json_object(text: str) -> Any:
