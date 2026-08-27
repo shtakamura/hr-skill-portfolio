@@ -474,7 +474,7 @@ class GenerateSkillMasterTest(unittest.TestCase):
         self.assertNotIn("input", request_body)
         self.assertNotIn("tools", request_body)
         self.assertEqual(request_body["anthropic_version"], "bedrock-2023-05-31")
-        self.assertEqual(request_body["max_tokens"], 3000)
+        self.assertEqual(request_body["max_tokens"], 8000)
         request_content = request_body["messages"][0]["content"]
         self.assertEqual(request_content[0]["cache_control"], {"type": "ephemeral"})
         self.assertNotIn("cache_control", request_content[1])

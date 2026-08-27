@@ -264,7 +264,7 @@ def _invoke_bedrock(
 
     request_body = {
         "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 3000,
+        "max_tokens": 8000,
         "messages": [{"role": "user", "content": content}],
     }
 
