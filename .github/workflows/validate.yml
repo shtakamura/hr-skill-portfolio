@@ -93,3 +93,7 @@ jobs:
       - name: Run position master API tests
         working-directory: backend/lambda/get-position-master
         run: python -m unittest test_app.py -v
+
+      - name: Run similarity calculation tests
+        working-directory: backend/lambda/calculate-similarity
+        run: python -m unittest test_app.py -v

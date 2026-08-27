@@ -1,5 +1,4 @@
-import { Box, Paper } from "@mui/material";
-import { MiniSkillRadarChart } from "../chart/MiniSkillRadarChart";
+import { Box, Paper, Typography } from "@mui/material";
 import type { SimilarPosition } from "../../types/skillProfile";
 
 type SimilarPositionCardProps = {
@@ -9,6 +8,7 @@ type SimilarPositionCardProps = {
 };
 
 export const SimilarPositionCard = ({ position, selected, onSelect }: SimilarPositionCardProps) => {
+  const similarityPercent = Math.round(position.similarityScore * 100);
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -58,11 +58,18 @@ export const SimilarPositionCard = ({ position, selected, onSelect }: SimilarPos
         {position.rank}
       </Box>
       <Box sx={{ display: "grid", gridTemplateColumns: "92px 1fr", gap: 1, alignItems: "center", pt: 1.25 }}>
-        <MiniSkillRadarChart skills={position.skills} />
-        <Box sx={{ minHeight: 72 }}>
-          <Box sx={{ height: 18, mb: 1 }} />
-          <Box sx={{ height: 14, mb: 0.75 }} />
-          <Box sx={{ height: 14 }} />
+        <Box sx={{ minHeight: 72, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <Typography sx={{ color: selected ? "#d00000" : "text.secondary", fontSize: "1.2rem", fontWeight: 800 }}>
+            {similarityPercent}%
+          </Typography>
+        </Box>
+        <Box sx={{ minHeight: 72, display: "grid", alignContent: "center", gap: 0.5 }}>
+          <Typography sx={{ fontSize: "0.78rem", fontWeight: 800, lineHeight: 1.4 }}>
+            {position.positionName || "未評価ポジション"}
+          </Typography>
+          <Typography color="text.secondary" sx={{ fontSize: "0.72rem", fontWeight: 700 }}>
+            類似度: {similarityPercent}%
+          </Typography>
         </Box>
       </Box>
     </Paper>

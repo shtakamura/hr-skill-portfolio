@@ -2,8 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { mockSkillLevels } from "../data/skillProfileMockData";
 import type { Position } from "../types/position";
 import {
+  buildSimilarPositionsUrl,
   buildPositionSkillsUrl,
+  getSimilarPositions,
   getPositionSkillProfile,
+  mapSimilarPositionsResponse,
   mapApiResponseToProfile,
   sampleProfileForPosition,
 } from "./skillProfileService";
@@ -32,6 +35,10 @@ describe("skillProfileService", () => {
   it("always queries position skills by positionId", () => {
     expect(buildPositionSkillsUrl(apiPosition)).toBe("/position-skills?positionId=POS00005648");
     expect(buildPositionSkillsUrl(position)).toBe("/position-skills?positionId=P002-03");
+  });
+
+  it("queries similar positions by positionId", () => {
+    expect(buildSimilarPositionsUrl("POS00005648")).toBe("/similar-positions?positionId=POS00005648");
   });
 
   it("maps API data to radar chart skills without changing Japanese names", () => {
@@ -108,7 +115,7 @@ describe("skillProfileService", () => {
     await expect(getPositionSkillProfile(position)).rejects.toThrow("Failed to fetch position skill profile");
   });
 
-  it("loads API data with fetch and does not call similar-position APIs", async () => {
+  it("loads API data with fetch", async () => {
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -126,5 +133,47 @@ describe("skillProfileService", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(profile.dataSource).toBe("api");
     expect(profile.skills).toEqual([{ skillId: "s1", skillName: "データ分析", level: 4, maxLevel: 5 }]);
+  });
+
+  it("maps similar position rankings for the right side cards", () => {
+    const positions = mapSimilarPositionsResponse({
+      dataFound: true,
+      selectedPositionId: "POS00005648",
+      results: [
+        { rank: 1, positionId: "POS00000001", positionName: "営業第一部マネージャー", similarityScore: 0.81 },
+        { rank: 2, positionId: "POS00000002", positionName: "営業企画マネージャー", similarityScore: 0.74 },
+      ],
+    });
+
+    expect(positions).toEqual([
+      {
+        rank: 1,
+        positionId: "POS00000001",
+        positionName: "営業第一部マネージャー",
+        departmentName: "",
+        businessUnitName: "",
+        skills: [],
+        similarityScore: 0.81,
+      },
+      {
+        rank: 2,
+        positionId: "POS00000002",
+        positionName: "営業企画マネージャー",
+        departmentName: "",
+        businessUnitName: "",
+        skills: [],
+        similarityScore: 0.74,
+      },
+    ]);
+  });
+
+  it("returns no similar positions when API has no evaluated data", () => {
+    expect(mapSimilarPositionsResponse({ dataFound: false, selectedPositionId: "POS", results: [] })).toEqual([]);
+  });
+
+  it("does not hide similar-position API errors", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+    await expect(getSimilarPositions("POS00005648")).rejects.toThrow("Failed to fetch similar positions");
   });
 });

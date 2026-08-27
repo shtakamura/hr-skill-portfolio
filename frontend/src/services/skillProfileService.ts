@@ -1,4 +1,4 @@
-import { mockSimilarPositions, mockSkillLevels } from "../data/skillProfileMockData";
+import { mockSkillLevels } from "../data/skillProfileMockData";
 import { getPositionById } from "./positionService";
 import type { Position } from "../types/position";
 import type { PositionSkillProfile, SimilarPosition } from "../types/skillProfile";
@@ -15,6 +15,19 @@ type PositionSkillsApiResponse = {
   organizationName: string | null;
   positionName: string | null;
   skills: PositionSkillsApiSkill[];
+};
+
+type SimilarPositionApiItem = {
+  rank: number;
+  positionId: string;
+  positionName: string;
+  similarityScore: number;
+};
+
+type SimilarPositionsApiResponse = {
+  dataFound: boolean;
+  selectedPositionId: string;
+  results: SimilarPositionApiItem[];
 };
 
 const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
@@ -93,5 +106,35 @@ export const getFallbackPositionSkillProfile = async (positionId: string): Promi
   };
 };
 
-export const getSimilarPositions = async (_positionId: string): Promise<SimilarPosition[]> =>
-  Promise.resolve(mockSimilarPositions);
+export const buildSimilarPositionsUrl = (positionId: string): string => {
+  const params = new URLSearchParams({ positionId });
+  return `${apiBaseUrl}/similar-positions?${params.toString()}`;
+};
+
+export const mapSimilarPositionsResponse = (response: SimilarPositionsApiResponse): SimilarPosition[] => {
+  if (!response.dataFound) {
+    return [];
+  }
+  return response.results.slice(0, 20).map((position) => ({
+    rank: position.rank,
+    positionId: position.positionId,
+    positionName: position.positionName,
+    departmentName: "",
+    businessUnitName: "",
+    skills: [],
+    similarityScore: position.similarityScore,
+  }));
+};
+
+export const getSimilarPositions = async (positionId: string): Promise<SimilarPosition[]> => {
+  const response = await fetch(buildSimilarPositionsUrl(positionId), {
+    method: "GET",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error("Failed to fetch similar positions");
+  }
+
+  const body = (await response.json()) as SimilarPositionsApiResponse;
+  return mapSimilarPositionsResponse(body);
+};

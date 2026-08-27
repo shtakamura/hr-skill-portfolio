@@ -11,9 +11,10 @@ export const mockSkillLevels: SkillLevel[] = [
 
 export const mockSimilarPositions: SimilarPosition[] = Array.from({ length: 20 }, (_, index) => ({
   rank: index + 1,
-  positionId: null,
+  positionId: `sample-${index + 1}`,
   positionName: "",
   departmentName: "",
   businessUnitName: "",
   skills: mockSkillLevels,
+  similarityScore: 0,
 }));
