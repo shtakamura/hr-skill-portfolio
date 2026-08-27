@@ -407,7 +407,11 @@ def _parse_skill_master_json(
             "Excluded duplicate skills by normalized skill_name: %s", duplicate_count
         )
 
-    return {"skills": normalized_skills}
+    classification_summary = _normalize_cell(data.get("classificationSummary"))
+    return {
+        "skills": normalized_skills,
+        "classificationSummary": classification_summary,
+    }
 
 
 def _normalize_skill_item(item: Any) -> dict[str, str]:
@@ -416,7 +420,6 @@ def _normalize_skill_item(item: Any) -> dict[str, str]:
             "skillName": _normalize_skill_name(item),
             "category": "",
             "lightcastCategory": "",
-            "classificationReason": "",
         }
 
     if not isinstance(item, dict):
@@ -429,7 +432,6 @@ def _normalize_skill_item(item: Any) -> dict[str, str]:
         "skillName": skill_name,
         "category": _normalize_cell(item.get("category")),
         "lightcastCategory": _normalize_cell(item.get("lightcastCategory")),
-        "classificationReason": _normalize_cell(item.get("classificationReason")),
     }
 
 
@@ -513,6 +515,10 @@ def _save_skill_master(
 
     now = datetime.now(timezone.utc).isoformat()
     count = 0
+    classification_summary = _normalize_cell(skill_master.get("classificationSummary"))
+
+    if classification_summary:
+        logger.info("Skill classification summary: %s", classification_summary)
 
     with table.batch_writer() as batch:
         for skill in skill_master["skills"]:
@@ -521,16 +527,6 @@ def _save_skill_master(
             category = skill.get("category", "") if isinstance(skill, dict) else ""
             lightcast_category = (
                 skill.get("lightcastCategory", "") if isinstance(skill, dict) else ""
-            )
-            classification_reason = (
-                skill.get("classificationReason", "") if isinstance(skill, dict) else ""
-            )
-
-            logger.info(
-                "Skill classified: skillName=%s lightcastCategory=%s reason=%s",
-                skill_name,
-                lightcast_category,
-                classification_reason,
             )
 
             batch.put_item(
