@@ -2,6 +2,7 @@ export type OrganizationLevel = "company" | "cxo" | "bu" | "department";
 
 export type Position = {
   positionId: string;
+  organizationId: string;
   positionName: string;
   departmentName: string;
   businessUnitName: string;
@@ -12,6 +13,7 @@ export type Position = {
 
 export type Department = {
   departmentId: string;
+  organizationId: string;
   departmentName: string;
   businessUnitName: string;
   positions: Position[];

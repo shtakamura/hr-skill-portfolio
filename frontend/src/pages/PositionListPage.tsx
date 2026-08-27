@@ -10,8 +10,6 @@ import { usePositionSearch } from "../hooks/usePositionSearch";
 import { getDepartments } from "../services/positionService";
 import type { Department, Position } from "../types/position";
 
-const initialSelectedPositionId = "P002-03";
-
 const findPositionById = (departments: Department[], positionId: string): Position | undefined => {
   for (const department of departments) {
     const position = department.positions.find((candidate) => candidate.positionId === positionId);
@@ -25,14 +23,22 @@ const findPositionById = (departments: Department[], positionId: string): Positi
 export const PositionListPage = () => {
   const navigate = useNavigate();
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [selectedPositionId, setSelectedPositionId] = useState(initialSelectedPositionId);
+  const [selectedPositionId, setSelectedPositionId] = useState("");
   const [loading, setLoading] = useState(true);
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     let mounted = true;
     void getDepartments().then((items) => {
       if (mounted) {
         setDepartments(items);
+        setSelectedPositionId(items[0]?.positions[0]?.positionId ?? "");
+        setErrorMessage("");
+        setLoading(false);
+      }
+    }).catch(() => {
+      if (mounted) {
+        setErrorMessage("ポジション一覧を取得できませんでした。時間をおいて再試行してください");
         setLoading(false);
       }
     });
@@ -85,6 +91,10 @@ export const PositionListPage = () => {
             {loading ? (
               <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
                 <CircularProgress aria-label="ポジション一覧を読み込み中" />
+              </Box>
+            ) : errorMessage ? (
+              <Box sx={{ py: 8, textAlign: "center" }}>
+                <Typography sx={{ fontWeight: 700 }}>{errorMessage}</Typography>
               </Box>
             ) : filteredDepartments.length === 0 ? (
               <EmptyPositionResult />

@@ -63,6 +63,7 @@ const departmentSeeds: DepartmentSeed[] = [
 
 const createPosition = (department: DepartmentSeed, seed: PositionSeed, departmentIndex: number, positionIndex: number): Position => ({
   positionId: `P${String(departmentIndex + 1).padStart(3, "0")}-${String(positionIndex + 1).padStart(2, "0")}`,
+  organizationId: department.id,
   positionName: seed.name,
   departmentName: department.name,
   businessUnitName: department.businessUnit,
@@ -73,6 +74,7 @@ const createPosition = (department: DepartmentSeed, seed: PositionSeed, departme
 
 export const positionMockDepartments: Department[] = departmentSeeds.map((department) => ({
   departmentId: department.id,
+  organizationId: department.id,
   departmentName: department.name,
   businessUnitName: department.businessUnit,
   positions: department.positions.map((position, positionIndex) =>

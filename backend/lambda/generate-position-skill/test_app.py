@@ -29,6 +29,7 @@ class GeneratePositionSkillTest(unittest.TestCase):
         self.assertEqual(len(positions), 1)
         self.assertEqual(positions[0]["positionId"], "POS00003260")
         self.assertEqual(positions[0]["positionName"], "HRマネージャー")
+        self.assertEqual(positions[0]["organizationId"], app._build_organization_id("人事部", "Corporate"))
         self.assertEqual(positions[0]["businessUnitName"], "Corporate")
         self.assertEqual(positions[0]["organizationName"], "人事部")
         self.assertEqual(
@@ -41,6 +42,18 @@ class GeneratePositionSkillTest(unittest.TestCase):
         self.assertEqual(
             positions[0]["requiredSkills"],
             ["人材育成", "予算管理", "コミュニケーション"],
+        )
+
+    def test_load_positions_from_csv_strips_organization_suffix(self):
+        positions = app._load_positions_from_csv(_csv_bytes(position_name="ストラテジスト（人事部）"))
+
+        self.assertEqual(positions[0]["positionName"], "ストラテジスト")
+        self.assertEqual(positions[0]["organizationName"], "人事部")
+
+    def test_build_organization_id_is_stable_with_normalized_values(self):
+        self.assertEqual(
+            app._build_organization_id(" システム　開発部 ", "ＣＴＯ・テクノロジーBU"),
+            app._build_organization_id("システム 開発部", "CTO・テクノロジーBU"),
         )
 
     def test_load_skill_master_scans_all_pages(self):
@@ -200,15 +213,39 @@ class GeneratePositionSkillTest(unittest.TestCase):
         self.assertEqual(count, 2)
         self.assertEqual(table.items[0]["positionId"], "POS00003260")
         self.assertEqual(table.items[0]["skillId"], "s1")
+        self.assertEqual(table.items[0]["organizationId"], app._build_organization_id("人事部", "Corporate"))
         self.assertEqual(table.items[0]["level"], 4)
         self.assertNotIn("reason", table.items[0])
+
+    def test_save_position_masters_upserts_organizations_and_positions(self):
+        organization_table = FakeTable()
+        position_table = FakeTable()
+        fake_boto3 = FakeBoto3(tables={"OrganizationMaster": organization_table, "PositionMaster": position_table})
+        original_boto3 = app.boto3
+        app.boto3 = fake_boto3
+        try:
+            counts = app._save_position_masters("OrganizationMaster", "PositionMaster", [_position()])
+        finally:
+            app.boto3 = original_boto3
+
+        self.assertEqual(counts, {"organizationSavedCount": 1, "positionSavedCount": 1})
+        self.assertEqual(organization_table.items[0]["organizationId"], app._build_organization_id("人事部", "Corporate"))
+        self.assertEqual(organization_table.items[0]["organizationName"], "人事部")
+        self.assertTrue(organization_table.items[0]["isActive"])
+        self.assertEqual(position_table.items[0]["positionId"], "POS00003260")
+        self.assertEqual(position_table.items[0]["organizationId"], app._build_organization_id("人事部", "Corporate"))
+        self.assertEqual(position_table.items[0]["positionName"], "HRマネージャー")
 
     def test_handler_evaluates_and_saves_positions_without_aws(self):
         os.environ["BEDROCK_MODEL_ID"] = "model-id"
         os.environ["S3_BUCKET_NAME"] = "bucket"
         os.environ["SKILL_MASTER_TABLE_NAME"] = "SkillMaster"
         os.environ["POSITION_SKILL_TABLE_NAME"] = "PositionSkill"
+        os.environ["ORGANIZATION_MASTER_TABLE_NAME"] = "OrganizationMaster"
+        os.environ["POSITION_MASTER_TABLE_NAME"] = "PositionMaster"
         position_table = FakeTable()
+        organization_table = FakeTable()
+        position_master_table = FakeTable()
         fake_boto3 = FakeBoto3(
             s3=FakeS3Client(_csv_bytes()),
             bedrock=FakeBedrockClient(
@@ -237,6 +274,8 @@ class GeneratePositionSkillTest(unittest.TestCase):
                     ]
                 ),
                 "PositionSkill": position_table,
+                "OrganizationMaster": organization_table,
+                "PositionMaster": position_master_table,
             },
         )
         original_boto3 = app.boto3
@@ -252,11 +291,15 @@ class GeneratePositionSkillTest(unittest.TestCase):
         self.assertEqual(response["statusCode"], 200)
         self.assertEqual(body["position_count"], 1)
         self.assertEqual(body["saved_count"], 2)
+        self.assertEqual(body["organization_saved_count"], 1)
+        self.assertEqual(body["position_saved_count"], 1)
         self.assertEqual(len(position_table.items), 2)
+        self.assertEqual(len(organization_table.items), 1)
+        self.assertEqual(len(position_master_table.items), 1)
         self.assertEqual(len(fake_boto3.bedrock.requests), 2)
 
 
-def _csv_bytes():
+def _csv_bytes(position_name="HRマネージャー"):
     return (
         "ポジションコード,ポジション名,CXO・BU名,組織名,"
         "主な職務#1,主な職務#1 関与度(%),"
@@ -265,7 +308,7 @@ def _csv_bytes():
         "主な職務#4,主な職務#4 関与度(%),"
         "主な職務#5,主な職務#5 関与度(%),"
         "必要知識・スキル(知識・スキル)\n"
-        "POS00003260,HRマネージャー,Corporate,人事部,"
+        f"POS00003260,{position_name},Corporate,人事部,"
         "人材育成計画を策定する,40,予算を管理する,30,,,,,,,"
         "人材育成、予算管理、コミュニケーション\n"
     ).encode("utf-8-sig")
@@ -277,6 +320,7 @@ def _position():
         "positionName": "HRマネージャー",
         "businessUnitName": "Corporate",
         "organizationName": "人事部",
+        "organizationId": app._build_organization_id("人事部", "Corporate"),
         "duties": [
             {"name": "人材育成計画を策定する", "weight": 40},
             {"name": "予算を管理する", "weight": 30},

@@ -3,6 +3,8 @@ import json
 import logging
 import os
 import re
+import unicodedata
+import uuid
 from datetime import datetime, timezone
 from io import StringIO
 from pathlib import Path
@@ -41,12 +43,16 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     bucket_name = os.environ.get("S3_BUCKET_NAME")
     skill_master_table_name = os.environ.get("SKILL_MASTER_TABLE_NAME")
     position_skill_table_name = os.environ.get("POSITION_SKILL_TABLE_NAME")
+    organization_master_table_name = os.environ.get("ORGANIZATION_MASTER_TABLE_NAME")
+    position_master_table_name = os.environ.get("POSITION_MASTER_TABLE_NAME")
 
     if (
         not model_id
         or not bucket_name
         or not skill_master_table_name
         or not position_skill_table_name
+        or not organization_master_table_name
+        or not position_master_table_name
     ):
         logger.error("Missing required environment variables")
         return _error_response(500, "Required environment variables are missing")
@@ -60,6 +66,12 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         positions = _load_positions_from_csv(csv_bytes)
         if not positions:
             return _error_response(400, "No valid positions found in CSV")
+
+        master_saved_counts = _save_position_masters(
+            organization_master_table_name,
+            position_master_table_name,
+            positions,
+        )
 
         skill_master = _load_skill_master(skill_master_table_name)
         if not skill_master:
@@ -145,6 +157,10 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
                     "message": "Position skill levels evaluated successfully",
                     "position_count": len(positions),
                     "saved_count": total_saved_count,
+                    "organization_saved_count": master_saved_counts[
+                        "organizationSavedCount"
+                    ],
+                    "position_saved_count": master_saved_counts["positionSavedCount"],
                     "source": {"bucket": source_bucket, "key": source_key},
                     "usage": {
                         "totalInputTokens": total_input_tokens,
@@ -261,19 +277,95 @@ def _load_positions_from_csv(csv_bytes: bytes) -> list[dict[str, Any]]:
         required_skills = _split_required_skills(
             row.get("必要知識・スキル(知識・スキル)")
         )
+        organization_name = _normalize_cell(row.get("組織名"))
+        business_unit_name = _normalize_cell(row.get("CXO・BU名"))
         position = {
             "positionId": position_id,
-            "positionName": _normalize_cell(row.get("ポジション名")),
-            "businessUnitName": _normalize_cell(row.get("CXO・BU名")),
-            "organizationName": _normalize_cell(row.get("組織名")),
+            "positionName": _strip_organization_suffix(
+                _normalize_cell(row.get("ポジション名")),
+                organization_name,
+            ),
+            "businessUnitName": business_unit_name,
+            "organizationName": organization_name,
             "duties": duties,
             "requiredSkills": required_skills,
         }
+        position["organizationId"] = _build_organization_id(
+            position["organizationName"], position["businessUnitName"]
+        )
         if position["positionName"] or duties or required_skills:
             positions.append(position)
 
     logger.info("Loaded positions from CSV: %s", len(positions))
     return positions
+
+
+def _strip_organization_suffix(position_name: str, organization_name: str) -> str:
+    if not position_name or not organization_name:
+        return position_name
+    suffixes = (f"（{organization_name}）", f"({organization_name})")
+    for suffix in suffixes:
+        if position_name.endswith(suffix):
+            return position_name[: -len(suffix)].strip()
+    return position_name
+
+
+def _build_organization_id(organization_name: str, business_unit_name: str) -> str:
+    source = f"{_normalize_identity(organization_name)}\n{_normalize_identity(business_unit_name)}"
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, source))
+
+
+def _normalize_identity(value: Any) -> str:
+    text = unicodedata.normalize("NFKC", _normalize_cell(value))
+    return re.sub(r"\s+", " ", text)
+
+
+def _save_position_masters(
+    organization_table_name: str,
+    position_table_name: str,
+    positions: list[dict[str, Any]],
+) -> dict[str, int]:
+    dynamodb = boto3.resource("dynamodb")
+    organization_table = dynamodb.Table(organization_table_name)
+    position_table = dynamodb.Table(position_table_name)
+    now = datetime.now(timezone.utc).isoformat()
+
+    organization_items: dict[str, dict[str, Any]] = {}
+    for position in positions:
+        organization_id = position["organizationId"]
+        organization_items[organization_id] = {
+            "organizationId": organization_id,
+            "organizationName": position["organizationName"],
+            "businessUnitName": position["businessUnitName"],
+            "isActive": True,
+            "updatedAt": now,
+        }
+
+    with organization_table.batch_writer() as batch:
+        for item in organization_items.values():
+            batch.put_item(Item=item)
+
+    with position_table.batch_writer() as batch:
+        for position in positions:
+            batch.put_item(
+                Item={
+                    "positionId": position["positionId"],
+                    "organizationId": position["organizationId"],
+                    "positionName": position["positionName"],
+                    "isActive": True,
+                    "updatedAt": now,
+                }
+            )
+
+    logger.info(
+        "Saved position masters: organization_count=%s position_count=%s",
+        len(organization_items),
+        len(positions),
+    )
+    return {
+        "organizationSavedCount": len(organization_items),
+        "positionSavedCount": len(positions),
+    }
 
 
 def _parse_weight(value: Any) -> int | None:
@@ -430,6 +522,7 @@ def _save_position_skill_levels(
                 Item={
                     "positionId": position["positionId"],
                     "skillId": skill_level["skillId"],
+                    "organizationId": position["organizationId"],
                     "positionName": position["positionName"],
                     "businessUnitName": position["businessUnitName"],
                     "organizationName": position["organizationName"],

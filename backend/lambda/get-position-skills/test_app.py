@@ -14,19 +14,12 @@ class GetPositionSkillsTest(unittest.TestCase):
         dynamodb_module = types.ModuleType("boto3.dynamodb")
         conditions_module = types.ModuleType("boto3.dynamodb.conditions")
 
-        class FakeCondition:
-            def __init__(self, expression):
-                self.expression = expression
-
-            def __and__(self, other):
-                return FakeCondition(("and", self.expression, other.expression))
-
         class FakeKey:
             def __init__(self, name):
                 self.name = name
 
             def eq(self, value):
-                return FakeCondition((self.name, value))
+                return (self.name, value)
 
         conditions_module.Key = FakeKey
         dynamodb_module.conditions = conditions_module
@@ -67,40 +60,12 @@ class GetPositionSkillsTest(unittest.TestCase):
         self.assertEqual(table.query_calls, 1)
         self.assertNotIn("IndexName", table.query_kwargs[0])
 
-    def test_gets_position_skills_by_organization_and_position_name(self):
-        table = FakeTable([{"Items": _items("POS00005648")}])
-        self._with_table(table)
-
-        response = app.handler(
-            {
-                "queryStringParameters": {
-                    "organizationName": " カスタマーサポート部 ",
-                    "positionName": "ストラテジスト（カスタマーサポート部）",
-                }
-            },
-            None,
-        )
-        body = json.loads(response["body"])
-
-        self.assertEqual(response["statusCode"], 200)
-        self.assertTrue(body["dataFound"])
-        self.assertEqual(
-            table.query_kwargs[0]["IndexName"], "organizationName-positionName-index"
-        )
-        self.assertEqual(table.scan_calls, 0)
-
     def test_returns_data_found_false_when_no_match(self):
         table = FakeTable([{"Items": []}])
         self._with_table(table)
 
         response = app.handler(
-            {
-                "queryStringParameters": {
-                    "organizationName": "システム開発部",
-                    "positionName": "スペシャリスト",
-                }
-            },
-            None,
+            {"queryStringParameters": {"positionId": "POS00005648"}}, None
         )
         body = json.loads(response["body"])
 
@@ -108,44 +73,7 @@ class GetPositionSkillsTest(unittest.TestCase):
         self.assertFalse(body["dataFound"])
         self.assertEqual(body["skills"], [])
 
-    def test_does_not_mix_same_position_name_from_other_department(self):
-        table = FakeTable([{"Items": []}])
-        self._with_table(table)
-
-        response = app.handler(
-            {
-                "queryStringParameters": {
-                    "organizationName": "営業部",
-                    "positionName": "スペシャリスト",
-                }
-            },
-            None,
-        )
-        body = json.loads(response["body"])
-
-        self.assertFalse(body["dataFound"])
-        self.assertEqual(table.scan_calls, 0)
-
-    def test_does_not_mix_multiple_position_ids_from_name_lookup(self):
-        table = FakeTable(
-            [
-                {
-                    "Items": [
-                        *_items("POS00005648"),
-                        {
-                            "positionId": "POS00009999",
-                            "skillId": "other",
-                            "organizationName": "システム開発部",
-                            "positionName": "スペシャリスト",
-                            "skillName": "別ポジションスキル",
-                            "level": 5,
-                        },
-                    ]
-                }
-            ]
-        )
-        self._with_table(table)
-
+    def test_rejects_organization_and_position_name_without_position_id(self):
         response = app.handler(
             {
                 "queryStringParameters": {
@@ -155,14 +83,8 @@ class GetPositionSkillsTest(unittest.TestCase):
             },
             None,
         )
-        body = json.loads(response["body"])
 
-        self.assertEqual(response["statusCode"], 200)
-        self.assertFalse(body["dataFound"])
-        self.assertEqual(body["skills"], [])
-
-    def test_normalizes_unicode_and_whitespace_safely(self):
-        self.assertEqual(app._normalize("  ＡＢＣ　 部  "), "ABC 部")
+        self.assertEqual(response["statusCode"], 400)
 
     def test_sorts_by_level_then_skill_name_and_limits_top_10(self):
         items = [
@@ -191,7 +113,7 @@ class GetPositionSkillsTest(unittest.TestCase):
             )
         ]
 
-        body = app._build_response(items, "POS", None, None)
+        body = app._build_response(items, "POS")
 
         self.assertEqual(len(body["skills"]), 10)
         self.assertEqual(body["skills"][0]["skillName"], "A")
@@ -199,7 +121,7 @@ class GetPositionSkillsTest(unittest.TestCase):
         self.assertNotIn("K", [skill["skillName"] for skill in body["skills"]])
 
     def test_keeps_less_than_10_valid_skills(self):
-        body = app._build_response(_items("POS00005648")[:3], "POS00005648", None, None)
+        body = app._build_response(_items("POS00005648")[:3], "POS00005648")
 
         self.assertEqual(len(body["skills"]), 3)
 
@@ -225,7 +147,7 @@ class GetPositionSkillsTest(unittest.TestCase):
             },
         ]
 
-        body = app._build_response(items, "POS00005648", None, None)
+        body = app._build_response(items, "POS00005648")
 
         self.assertEqual(body["validSkillCount"], 3)
         self.assertEqual(len(body["skills"]), 3)
