@@ -1,9 +1,13 @@
 import * as cdk from "aws-cdk-lib";
 import { Construct } from "constructs";
+import * as apigateway from "aws-cdk-lib/aws-apigateway";
+import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
+import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as dynamodb from "aws-cdk-lib/aws-dynamodb";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as lambda from "aws-cdk-lib/aws-lambda";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
 import * as s3n from "aws-cdk-lib/aws-s3-notifications";
 
 export class HrSkillPortfolioStack extends cdk.Stack {
@@ -15,6 +19,14 @@ export class HrSkillPortfolioStack extends cdk.Stack {
       encryption: s3.BucketEncryption.S3_MANAGED,
       enforceSSL: true,
       versioned: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true
+    });
+
+    const frontendBucket = new s3.Bucket(this, "FrontendBucket", {
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      enforceSSL: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true
     });
@@ -43,6 +55,19 @@ export class HrSkillPortfolioStack extends cdk.Stack {
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       pointInTimeRecovery: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    positionSkillTable.addGlobalSecondaryIndex({
+      indexName: "organizationName-positionName-index",
+      partitionKey: {
+        name: "organizationName",
+        type: dynamodb.AttributeType.STRING
+      },
+      sortKey: {
+        name: "positionName",
+        type: dynamodb.AttributeType.STRING
+      },
+      projectionType: dynamodb.ProjectionType.ALL
     });
 
     const generateSkillMasterFunction = new lambda.Function(this, "GenerateSkillMasterFunction", {
@@ -74,6 +99,19 @@ export class HrSkillPortfolioStack extends cdk.Stack {
       }
     });
 
+    const getPositionSkillsFunction = new lambda.Function(this, "GetPositionSkillsFunction", {
+      functionName: "get-position-skills",
+      runtime: lambda.Runtime.PYTHON_3_12,
+      code: lambda.Code.fromAsset("../../backend/lambda/get-position-skills"),
+      handler: "app.handler",
+      memorySize: 512,
+      timeout: cdk.Duration.seconds(30),
+      environment: {
+        POSITION_SKILL_TABLE_NAME: positionSkillTable.tableName,
+        CORS_ALLOW_ORIGIN: "http://localhost:5173"
+      }
+    });
+
     skillMasterTable.grantReadWriteData(generateSkillMasterFunction);
     portfolioBucket.grantRead(generateSkillMasterFunction);
     generateSkillMasterFunction.addToRolePolicy(
@@ -94,6 +132,66 @@ export class HrSkillPortfolioStack extends cdk.Stack {
         resources: ["*"]
       })
     );
+
+    positionSkillTable.grantReadData(getPositionSkillsFunction);
+
+    const api = new apigateway.RestApi(this, "HrSkillPortfolioApi", {
+      restApiName: "hr-skill-portfolio-api",
+      deployOptions: {
+        stageName: "prod"
+      },
+      defaultCorsPreflightOptions: {
+        allowOrigins: ["http://localhost:5173"],
+        allowMethods: ["GET", "OPTIONS"],
+        allowHeaders: ["Content-Type", "Authorization"]
+      }
+    });
+
+    api.root
+      .addResource("position-skills")
+      .addMethod("GET", new apigateway.LambdaIntegration(getPositionSkillsFunction));
+
+    const distribution = new cloudfront.Distribution(this, "FrontendDistribution", {
+      defaultRootObject: "index.html",
+      defaultBehavior: {
+        origin: origins.S3BucketOrigin.withOriginAccessControl(frontendBucket),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED
+      },
+      additionalBehaviors: {
+        "position-skills": {
+          origin: new origins.HttpOrigin(
+            `${api.restApiId}.execute-api.${cdk.Stack.of(this).region}.${cdk.Stack.of(this).urlSuffix}`,
+            { originPath: `/${api.deploymentStage.stageName}` }
+          ),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER
+        }
+      },
+      errorResponses: [
+        {
+          httpStatus: 403,
+          responseHttpStatus: 200,
+          responsePagePath: "/index.html",
+          ttl: cdk.Duration.minutes(5)
+        },
+        {
+          httpStatus: 404,
+          responseHttpStatus: 200,
+          responsePagePath: "/index.html",
+          ttl: cdk.Duration.minutes(5)
+        }
+      ]
+    });
+
+    new s3deploy.BucketDeployment(this, "FrontendDeployment", {
+      sources: [s3deploy.Source.asset("../../frontend/dist")],
+      destinationBucket: frontendBucket,
+      distribution,
+      distributionPaths: ["/index.html", "/assets/*"]
+    });
 
     portfolioBucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
@@ -125,6 +223,22 @@ export class HrSkillPortfolioStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, "EvaluatePositionSkillFunctionName", {
       value: evaluatePositionSkillFunction.functionName
+    });
+
+    new cdk.CfnOutput(this, "GetPositionSkillsFunctionName", {
+      value: getPositionSkillsFunction.functionName
+    });
+
+    new cdk.CfnOutput(this, "ApiUrl", {
+      value: api.url
+    });
+
+    new cdk.CfnOutput(this, "FrontendBucketName", {
+      value: frontendBucket.bucketName
+    });
+
+    new cdk.CfnOutput(this, "FrontendDistributionDomainName", {
+      value: distribution.distributionDomainName
     });
   }
 }
