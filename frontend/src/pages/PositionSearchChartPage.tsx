@@ -30,6 +30,7 @@ export const PositionSearchChartPage = () => {
       departmentName: selectedPosition.departmentName,
       businessUnitName: selectedPosition.businessUnitName,
       skills: [],
+      dataSource: "sample",
     };
   });
   const [similarPositions, setSimilarPositions] = useState<SimilarPosition[]>([]);
@@ -56,10 +57,7 @@ export const PositionSearchChartPage = () => {
         if (!position) {
           throw new Error("Position not found");
         }
-        const [skillProfile, positions] = await Promise.all([
-          getPositionSkillProfile(positionId),
-          getSimilarPositions(positionId),
-        ]);
+        const [skillProfile, positions] = await Promise.all([getPositionSkillProfile(position), getSimilarPositions(positionId)]);
         if (mounted) {
           setProfile(skillProfile);
           setSimilarPositions(positions);
@@ -89,7 +87,10 @@ export const PositionSearchChartPage = () => {
       <Box sx={{ minHeight: "100vh", backgroundColor: "background.default" }}>
         <SearchChartHeader selectedPosition={profile} onBack={handleBack} />
         <Box sx={{ minHeight: 420, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <CircularProgress aria-label="人材サーチャートを読み込み中" />
+          <Box sx={{ textAlign: "center" }}>
+            <CircularProgress aria-label="スキルデータを読み込み中" />
+            <Typography sx={{ mt: 2, fontWeight: 700 }}>スキルデータを読み込んでいます</Typography>
+          </Box>
         </Box>
       </Box>
     );
@@ -100,7 +101,7 @@ export const PositionSearchChartPage = () => {
       <Box sx={{ minHeight: "100vh", backgroundColor: "background.default" }}>
         <SearchChartHeader selectedPosition={profile} onBack={handleBack} />
         <Box sx={{ maxWidth: 1600, mx: "auto", px: { xs: 2, md: 4 }, py: 8, textAlign: "center" }}>
-          <Typography sx={{ mb: 2, fontWeight: 700 }}>{errorMessage || "データを取得できませんでした"}</Typography>
+          <Typography sx={{ mb: 2, fontWeight: 700 }}>{errorMessage || "スキルデータを取得できませんでした。時間をおいて再試行してください"}</Typography>
           <Button variant="contained" color="primary" aria-label="ポジション一覧へ戻る" onClick={handleBack}>
             ポジション一覧へ戻る
           </Button>

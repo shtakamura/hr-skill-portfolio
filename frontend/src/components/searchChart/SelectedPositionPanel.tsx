@@ -26,6 +26,9 @@ export const SelectedPositionPanel = ({ profile }: SelectedPositionPanelProps) =
       <Typography color="text.secondary" sx={{ textAlign: "center" }}>
         {profile.businessUnitName} ／ {profile.departmentName}
       </Typography>
+      <Typography color="text.secondary" sx={{ mt: 0.75, textAlign: "center", fontSize: "0.78rem", fontWeight: 700 }}>
+        {profile.dataSource === "api" ? "評価済みスキルデータを表示" : "サンプルデータを表示"}
+      </Typography>
     </Paper>
     <Paper variant="outlined" sx={{ p: 2, borderRadius: 0, borderColor: "#d8dadd", overflow: "hidden" }}>
       <MainSkillRadarChart skills={profile.skills} />

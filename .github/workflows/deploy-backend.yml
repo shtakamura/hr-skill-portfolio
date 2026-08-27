@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "backend/**"
+      - "frontend/**"
       - "infra/cdk/**"
       - ".github/workflows/deploy-backend.yml"
 
@@ -28,6 +29,14 @@ jobs:
       - name: Install CDK dependencies
         working-directory: infra/cdk
         run: npm ci
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
 
       - name: Build CDK
         working-directory: infra/cdk
