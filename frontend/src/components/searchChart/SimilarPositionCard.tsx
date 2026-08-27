@@ -9,7 +9,7 @@ type SimilarPositionCardProps = {
 };
 
 export const SimilarPositionCard = ({ position, selected, onSelect }: SimilarPositionCardProps) => {
-  const similarityPercent = Math.round(position.similarityScore * 100);
+  const coveragePercent = Math.round(position.coverageScore * 100);
   const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
@@ -70,7 +70,10 @@ export const SimilarPositionCard = ({ position, selected, onSelect }: SimilarPos
             {position.businessUnitName || "-"}
           </Typography>
           <Typography color="text.secondary" sx={{ fontSize: "0.72rem", fontWeight: 700 }}>
-            類似度: {similarityPercent}%
+            カバー度: {coveragePercent}%
+          </Typography>
+          <Typography color="text.secondary" sx={{ fontSize: "0.68rem", lineHeight: 1.35 }}>
+            中核スキル {position.coveredCoreSkillCount} / {position.selectedCoreSkillCount}件をカバー
           </Typography>
         </Box>
         <Box sx={{ display: "flex", justifyContent: "center" }}>

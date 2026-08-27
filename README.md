@@ -3,7 +3,7 @@
 ## Overview
 
 職務情報から共通スキルマスタを生成し、
-ポジション別スキルレベルおよび職務類似度を可視化するPoC。
+ポジション別スキルレベルおよびポジションカバー度を可視化するPoC。
 
 ## Architecture
 
@@ -24,7 +24,7 @@ Amazon DynamoDB
 ↓
 AWS Lambda
 
-- 類似度計算
+- ポジションカバー度計算
 
 ↓
 React Frontend
@@ -73,33 +73,33 @@ React Frontend
 
 0：知識・経験がない
 
-## Similarity Calculation
+## Position Coverage Calculation
 
-職務類似度はスキル保有状況をもとに算出する。
+ポジションカバー度は、選択ポジションの中核スキル要件を他ポジションがどの程度満たすかで算出する。
 
 使用指標
 
-- Jaccard Similarity
+- Core Skill Level Coverage
 
 計算式
 
-J(A,B) = |A ∩ B| / |A ∪ B|
+coverage(A,B) = coveredCoreSkillCount(A,B) / selectedCoreSkillCount(A)
 
-A：ポジションAのスキル集合
+A：選択ポジション
 
-B：ポジションBのスキル集合
+B：比較ポジション
 
 例
 
-A = {戦略立案, 業務企画, コミュニケーション}
+Aの中核スキル = {営業マネジメント:5, 顧客関係管理:4, 戦略立案:4, リーダーシップ:5}
 
-B = {戦略立案, データ分析, コミュニケーション}
+Bの該当スキルレベル = {営業マネジメント:5, 顧客関係管理:5, 戦略立案:3, リーダーシップ:4}
 
-共通スキル = 2
+カバー済み中核スキル = 2
 
-全スキル = 4
+選択ポジションの中核スキル = 4
 
-類似度 = 2 / 4 = 0.5
+カバー度 = 2 / 4 = 0.5
 
 ## Tech Stack
 

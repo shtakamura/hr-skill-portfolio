@@ -126,7 +126,7 @@ export const PositionListPage = () => {
               }}
             >
               <Typography color="text.secondary" sx={{ fontSize: "0.82rem" }}>
-                ※ 部署から対象ポジションを選択し、詳細や類似ポジションを確認
+                ※ 部署から対象ポジションを選択し、詳細やカバー度の高いポジションを確認
               </Typography>
               <Typography color="primary" sx={{ fontSize: "0.82rem", fontWeight: 700 }}>
                 選択中のポジションは赤枠で表示

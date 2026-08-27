@@ -25,13 +25,16 @@ type SimilarPositionApiItem = {
   positionName: string;
   organizationName: string;
   businessUnitName: string;
-  similarityScore: number;
+  coverageScore: number;
+  coveredCoreSkillCount: number;
+  selectedCoreSkillCount: number;
   chartValues: number[];
 };
 
 type SimilarPositionsApiResponse = {
   dataFound: boolean;
   selectedPositionId: string;
+  selectedCoreSkillCount: number;
   chartAxis: Array<Pick<PositionSkillsApiSkill, "skillId" | "skillName">>;
   results: SimilarPositionApiItem[];
 };
@@ -40,6 +43,9 @@ const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
 const isValidLevel = (level: unknown): level is number =>
   typeof level === "number" && Number.isInteger(level) && level >= 0 && level <= 5;
+
+const toCoverageScore = (value: unknown): number =>
+  typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1 ? value : 0;
 
 export const buildPositionSkillsUrl = (position: Position): string => {
   const params = new URLSearchParams({ positionId: position.positionId });
@@ -138,7 +144,9 @@ export const mapSimilarPositionsResponse = (response: SimilarPositionsApiRespons
         maxLevel: 5,
       };
     }),
-    similarityScore: position.similarityScore,
+    coverageScore: toCoverageScore(position.coverageScore),
+    coveredCoreSkillCount: Number.isInteger(position.coveredCoreSkillCount) && position.coveredCoreSkillCount >= 0 ? position.coveredCoreSkillCount : 0,
+    selectedCoreSkillCount: Number.isInteger(position.selectedCoreSkillCount) && position.selectedCoreSkillCount >= 0 ? position.selectedCoreSkillCount : response.selectedCoreSkillCount,
   }));
 };
 
