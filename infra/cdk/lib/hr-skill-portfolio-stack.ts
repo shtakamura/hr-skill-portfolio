@@ -158,7 +158,7 @@ export class HrSkillPortfolioStack extends cdk.Stack {
     );
 
     skillMasterTable.grantReadData(evaluatePositionSkillFunction);
-    positionSkillTable.grantWriteData(evaluatePositionSkillFunction);
+    positionSkillTable.grantReadWriteData(evaluatePositionSkillFunction);
     organizationMasterTable.grantReadWriteData(evaluatePositionSkillFunction);
     positionMasterTable.grantReadWriteData(evaluatePositionSkillFunction);
     portfolioBucket.grantRead(evaluatePositionSkillFunction);
@@ -171,8 +171,8 @@ export class HrSkillPortfolioStack extends cdk.Stack {
     );
 
     positionSkillTable.grantReadData(getPositionSkillsFunction);
-  organizationMasterTable.grantReadData(getPositionMasterFunction);
-  positionMasterTable.grantReadData(getPositionMasterFunction);
+    organizationMasterTable.grantReadData(getPositionMasterFunction);
+    positionMasterTable.grantReadData(getPositionMasterFunction);
 
     const api = new apigateway.RestApi(this, "HrSkillPortfolioApi", {
       restApiName: "hr-skill-portfolio-api",
