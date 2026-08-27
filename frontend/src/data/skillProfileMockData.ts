@@ -16,5 +16,7 @@ export const mockSimilarPositions: SimilarPosition[] = Array.from({ length: 20 }
   departmentName: "",
   businessUnitName: "",
   skills: mockSkillLevels,
-  similarityScore: 0,
+  coverageScore: 0,
+  coveredCoreSkillCount: 0,
+  selectedCoreSkillCount: 0,
 }));

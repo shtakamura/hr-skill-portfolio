@@ -25,7 +25,9 @@ export type SimilarPosition = {
   departmentName: string;
   businessUnitName: string;
   skills: SkillLevel[];
-  similarityScore: number;
+  coverageScore: number;
+  coveredCoreSkillCount: number;
+  selectedCoreSkillCount: number;
 };
 
 export type SimilaritySearchResult = {

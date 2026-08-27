@@ -11,7 +11,7 @@ from botocore.exceptions import BotoCoreError, ClientError
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-# UI要件に合わせ、類似度ランキングは上位9件だけ返す。
+# UI要件に合わせ、カバー度ランキングは上位9件だけ返す。
 MAX_RESULT_COUNT = 9
 MAX_CHART_SKILL_COUNT = 10
 
@@ -20,7 +20,7 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
     """API Gatewayから呼ばれるLambdaエントリポイント。
 
     選択されたpositionIdを受け取り、PositionSkillの全件データから
-    他ポジションとのJaccard類似度ランキングを都度計算する。
+    他ポジションが選択ポジションの中核スキル要件をどれだけ満たすかを都度計算する。
     """
     position_skill_table_name = os.environ.get("POSITION_SKILL_TABLE_NAME")
     position_master_table_name = os.environ.get("POSITION_MASTER_TABLE_NAME")
@@ -46,7 +46,7 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         if not selected_skills:
             # 選択ポジションの評価済みスキルがない場合は、業務上の正常系として空結果を返す。
             logger.info(
-                "Similarity lookup: selectedPositionId=%s positionCount=%s resultCount=0 dataFound=false",
+                "Position coverage lookup: selectedPositionId=%s comparedPositionCount=%s returnedPositionCount=0 dataFound=false calculationMethod=core_skill_level_coverage",
                 selected_position_id,
                 len(skills_by_position),
             )
@@ -59,10 +59,26 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
                 },
             )
 
-        # 選択ポジションの中核スキル集合を基準に、他ポジションをランキングする。
-        selected_core_skills = _core_skill_ids(selected_skills)
+        # 選択ポジションの中核スキル要件を基準に、他ポジションのカバー度をランキングする。
+        selected_core_skills = _selected_core_skills(selected_skills)
+        if not selected_core_skills:
+            logger.info(
+                "Position coverage lookup: selectedPositionId=%s comparedPositionCount=%s returnedPositionCount=0 dataFound=false calculationMethod=core_skill_level_coverage",
+                selected_position_id,
+                len(skills_by_position),
+            )
+            return _response(
+                200,
+                {
+                    "dataFound": False,
+                    "selectedPositionId": selected_position_id,
+                    "selectedCoreSkillCount": 0,
+                    "chartAxis": _chart_axis(selected_skills),
+                    "results": [],
+                },
+            )
         chart_axis = _chart_axis(selected_skills)
-        results = _rank_similar_positions(
+        results = _rank_covered_positions(
             selected_position_id,
             selected_core_skills,
             chart_axis,
@@ -71,17 +87,19 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         )
 
         logger.info(
-            "Similarity lookup: selectedPositionId=%s positionCount=%s selectedCoreSkillCount=%s resultCount=%s dataFound=true",
+            "Position coverage lookup: selectedPositionId=%s selectedCoreSkillCount=%s comparedPositionCount=%s returnedPositionCount=%s highestCoverageScore=%s calculationMethod=core_skill_level_coverage dataFound=true",
             selected_position_id,
-            len(skills_by_position),
             len(selected_core_skills),
+            max(len(skills_by_position) - 1, 0),
             len(results),
+            results[0]["coverageScore"] if results else 0,
         )
         return _response(
             200,
             {
                 "dataFound": True,
                 "selectedPositionId": selected_position_id,
+                "selectedCoreSkillCount": len(selected_core_skills),
                 "chartAxis": chart_axis,
                 "results": results,
             },
@@ -97,7 +115,7 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
 def _scan_table(table: Any) -> list[dict[str, Any]]:
     """DynamoDBテーブルをページネーション込みで全件Scanする。
 
-    類似度計算は全ポジション比較が必要なため、PoCでは全件取得する。
+    カバー度計算は全ポジション比較が必要なため、PoCでは全件取得する。
     """
     items: list[dict[str, Any]] = []
     scan_kwargs: dict[str, Any] = {}
@@ -116,7 +134,7 @@ def _group_position_skills(
 ) -> dict[str, list[dict[str, Any]]]:
     """PositionSkillの行をpositionId単位にまとめる。
 
-    levelが0〜5の整数ではない行は、類似度計算の軸を壊すため除外する。
+    levelが0〜5の整数ではない行は、カバー度計算の軸を壊すため除外する。
     """
     grouped: dict[str, list[dict[str, Any]]] = {}
     for item in items:
@@ -163,15 +181,33 @@ def _position_names(items: list[dict[str, Any]]) -> dict[str, str]:
     return names
 
 
-def _core_skill_ids(skills: list[dict[str, Any]]) -> set[str]:
-    """平均+標準偏差以上のスキルIDを中核スキルとして扱う。"""
+def _selected_core_skills(skills: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """選択ポジションの中核スキルと要求レベルを取り出す。"""
     levels = [skill["level"] for skill in skills]
     if not levels:
-        return set()
+        return []
     mean = sum(levels) / len(levels)
     variance = sum((level - mean) ** 2 for level in levels) / len(levels)
     threshold = mean + math.sqrt(variance)
-    return {skill["skillId"] for skill in skills if skill["level"] >= threshold}
+    core_skills = [
+        skill for skill in skills if skill["level"] > 0 and skill["level"] >= threshold
+    ]
+    if not core_skills:
+        positive_skills = [skill for skill in skills if skill["level"] > 0]
+        if not positive_skills:
+            return []
+        max_level = max(skill["level"] for skill in positive_skills)
+        core_skills = [
+            skill for skill in positive_skills if skill["level"] == max_level
+        ]
+    return [
+        {
+            "skillId": skill["skillId"],
+            "skillName": skill["skillName"],
+            "requiredLevel": skill["level"],
+        }
+        for skill in sorted(core_skills, key=lambda item: item["skillId"])
+    ]
 
 
 def _chart_axis(skills: list[dict[str, Any]]) -> list[dict[str, str]]:
@@ -247,35 +283,56 @@ def _chart_values(
     return [levels_by_skill_id.get(axis["skillId"], 0) for axis in chart_axis]
 
 
-def _jaccard_similarity(left: set[str], right: set[str]) -> float:
-    """2つの中核スキル集合からJaccard係数を計算する。"""
-    union = left | right
-    if not union:
-        return 0.0
-    return len(left & right) / len(union)
+def _skill_level_map(skills: list[dict[str, Any]]) -> dict[str, int]:
+    return {skill["skillId"]: skill["level"] for skill in skills}
 
 
-def _rank_similar_positions(
+def _coverage_score(
+    selected_core_skills: list[dict[str, Any]], comparison_levels: dict[str, int]
+) -> dict[str, Any]:
+    """選択ポジションの中核スキル要件を比較ポジションが満たす割合を計算する。"""
+    selected_core_skill_count = len(selected_core_skills)
+    if selected_core_skill_count == 0:
+        return {
+            "coverageScore": 0.0,
+            "coveredCoreSkillCount": 0,
+            "selectedCoreSkillCount": 0,
+        }
+    covered_count = 0
+    for core_skill in selected_core_skills:
+        comparison_level = comparison_levels.get(core_skill["skillId"], 0)
+        if comparison_level >= core_skill["requiredLevel"]:
+            covered_count += 1
+    return {
+        "coverageScore": round(covered_count / selected_core_skill_count, 4),
+        "coveredCoreSkillCount": covered_count,
+        "selectedCoreSkillCount": selected_core_skill_count,
+    }
+
+
+def _rank_covered_positions(
     selected_position_id: str,
-    selected_core_skills: set[str],
+    selected_core_skills: list[dict[str, Any]],
     chart_axis: list[dict[str, str]],
     skills_by_position: dict[str, list[dict[str, Any]]],
     position_names: dict[str, str],
 ) -> list[dict[str, Any]]:
-    """選択ポジション以外を類似度順に並べ、rank付きで上位件数だけ返す。"""
+    """選択ポジション以外をカバー度順に並べ、rank付きで上位件数だけ返す。"""
     scored_results: list[dict[str, Any]] = []
     for position_id, skills in skills_by_position.items():
         if position_id == selected_position_id:
             continue
         first_skill = skills[0]
-        score = _jaccard_similarity(selected_core_skills, _core_skill_ids(skills))
+        coverage = _coverage_score(selected_core_skills, _skill_level_map(skills))
         scored_results.append(
             {
                 "positionId": position_id,
                 "positionName": position_names.get(position_id, ""),
                 "organizationName": first_skill.get("organizationName", ""),
                 "businessUnitName": first_skill.get("businessUnitName", ""),
-                "similarityScore": round(score, 4),
+                "coverageScore": coverage["coverageScore"],
+                "coveredCoreSkillCount": coverage["coveredCoreSkillCount"],
+                "selectedCoreSkillCount": coverage["selectedCoreSkillCount"],
                 "chartValues": _chart_values(skills, chart_axis),
             }
         )
@@ -283,7 +340,8 @@ def _rank_similar_positions(
     # 同点時も毎回同じ順序になるよう、表示名とpositionIdでタイブレークする。
     scored_results.sort(
         key=lambda item: (
-            -item["similarityScore"],
+            -item["coverageScore"],
+            -item["coveredCoreSkillCount"],
             item["positionName"],
             item["positionId"],
         )

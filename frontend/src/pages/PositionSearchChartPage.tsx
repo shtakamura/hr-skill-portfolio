@@ -125,7 +125,7 @@ export const PositionSearchChartPage = () => {
           <SelectedPositionPanel profile={profile} />
           <SimilarPositionGrid positions={similarPositions} selectedRank={selectedRank} onSelectRank={setSelectedRank} />
         </Box>
-        {/* TODO: 類似ポジション詳細画面実装後に遷移処理を追加する。 */}
+        {/* TODO: カバー度の高いポジション詳細画面実装後に遷移処理を追加する。 */}
         <SearchChartFooter />
       </Box>
     </Box>

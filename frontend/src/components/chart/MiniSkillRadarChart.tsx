@@ -7,7 +7,7 @@ type MiniSkillRadarChartProps = {
 };
 
 export const MiniSkillRadarChart = ({ skills }: MiniSkillRadarChartProps) => (
-  <Box aria-label="類似ポジションのスキルレベルミニレーダーチャート" sx={{ width: 148, height: 136 }}>
+  <Box aria-label="カバー度の高いポジションのスキルレベルミニレーダーチャート" sx={{ width: 148, height: 136 }}>
     <ResponsiveContainer width="100%" height="100%">
       <RadarChart data={skills} outerRadius="72%" margin={{ top: 8, right: 8, bottom: 8, left: 8 }}>
         <PolarGrid stroke="#d6d9de" />
