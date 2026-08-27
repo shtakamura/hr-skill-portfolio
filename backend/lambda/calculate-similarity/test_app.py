@@ -27,7 +27,7 @@ class CalculateSimilarityTest(unittest.TestCase):
         os.environ["POSITION_MASTER_TABLE_NAME"] = "PositionMaster"
         os.environ["CORS_ALLOW_ORIGIN"] = "https://example.cloudfront.net"
 
-    def test_core_skill_keys_use_mean_plus_standard_deviation(self):
+    def test_core_skill_ids_use_mean_plus_standard_deviation(self):
         skills = [
             {"skillId": "A", "level": 5},
             {"skillId": "B", "level": 4},
@@ -35,22 +35,20 @@ class CalculateSimilarityTest(unittest.TestCase):
             {"skillId": "D", "level": 0},
         ]
 
-        self.assertEqual(app._core_skill_keys(skills), {("A", 5)})
+        self.assertEqual(app._core_skill_ids(skills), {"A"})
 
     def test_jaccard_similarity(self):
         self.assertEqual(
             app._jaccard_similarity(
-                {("A", 5), ("B", 4), ("C", 3), ("D", 2)},
-                {("A", 5), ("C", 3), ("E", 1)},
+                {"A", "B", "C", "D"},
+                {"A", "C", "E"},
             ),
             0.4,
         )
         self.assertEqual(app._jaccard_similarity(set(), set()), 0.0)
 
-    def test_same_skill_with_different_level_is_not_a_core_match(self):
-        self.assertEqual(
-            app._jaccard_similarity({("Leadership", 5)}, {("Leadership", 4)}), 0.0
-        )
+    def test_same_skill_with_different_level_is_a_core_match(self):
+        self.assertEqual(app._jaccard_similarity({"Leadership"}, {"Leadership"}), 1.0)
 
     def test_group_position_skills_excludes_invalid_levels_and_bool(self):
         grouped = app._group_position_skills(
@@ -94,7 +92,8 @@ class CalculateSimilarityTest(unittest.TestCase):
 
         results = app._rank_similar_positions(
             "P000",
-            app._core_skill_keys(skills_by_position["P000"]),
+            app._core_skill_ids(skills_by_position["P000"]),
+            app._chart_axis(skills_by_position["P000"]),
             skills_by_position,
             names,
         )
@@ -104,31 +103,60 @@ class CalculateSimilarityTest(unittest.TestCase):
         self.assertEqual(results[0]["positionId"], "P001")
         self.assertNotIn("P000", [result["positionId"] for result in results])
 
-    def test_chart_skills_are_top10_by_level_then_skill_name(self):
+    def test_chart_axis_uses_highest_skill_and_representative_lightcast_category(self):
         skills = [
-            {"skillId": f"s{index}", "skillName": skill_name, "level": level}
-            for index, (skill_name, level) in enumerate(
-                [
-                    ("K", 1),
-                    ("B", 5),
-                    ("A", 5),
-                    ("C", 4),
-                    ("D", 4),
-                    ("E", 3),
-                    ("F", 3),
-                    ("G", 2),
-                    ("H", 2),
-                    ("I", 1),
-                    ("J", 1),
-                ]
-            )
+            {
+                "skillId": "tech",
+                "skillName": "技術戦略",
+                "lightcastCategory": "Technology",
+                "level": 5,
+            },
+            {
+                "skillId": "tech2",
+                "skillName": "技術補助",
+                "lightcastCategory": "Technology",
+                "level": 0,
+            },
+            {
+                "skillId": "m1",
+                "skillName": "リーダーシップ",
+                "lightcastCategory": "Management",
+                "level": 4,
+            },
+            {
+                "skillId": "m2",
+                "skillName": "チーム管理",
+                "lightcastCategory": "Management",
+                "level": 4,
+            },
+            {
+                "skillId": "d1",
+                "skillName": "データ分析",
+                "lightcastCategory": "Data",
+                "level": 1,
+            },
         ]
 
-        chart_skills = app._chart_skills(skills)
+        chart_axis = app._chart_axis(skills)
 
-        self.assertEqual(len(chart_skills), 10)
-        self.assertEqual([skill["skillName"] for skill in chart_skills[:2]], ["A", "B"])
-        self.assertNotIn("K", [skill["skillName"] for skill in chart_skills])
+        self.assertEqual(
+            chart_axis,
+            [
+                {"skillId": "tech", "skillName": "技術戦略"},
+                {"skillId": "m2", "skillName": "チーム管理"},
+                {"skillId": "m1", "skillName": "リーダーシップ"},
+            ],
+        )
+
+    def test_chart_values_follow_selected_position_axis(self):
+        axis = [
+            {"skillId": "S0", "skillName": "A"},
+            {"skillId": "missing", "skillName": "Missing"},
+        ]
+
+        self.assertEqual(
+            app._chart_values(_position_skill_items("P002", [5]), axis), [5, 0]
+        )
 
     def test_handler_returns_ranked_similarity_without_aws(self):
         fake_boto3 = FakeBoto3(
@@ -181,6 +209,14 @@ class CalculateSimilarityTest(unittest.TestCase):
         self.assertTrue(body["dataFound"])
         self.assertEqual(body["selectedPositionId"], "P001")
         self.assertEqual(
+            body["chartAxis"],
+            [
+                {"skillId": "S0", "skillName": "スキル0"},
+                {"skillId": "S1", "skillName": "スキル1"},
+                {"skillId": "S2", "skillName": "スキル2"},
+            ],
+        )
+        self.assertEqual(
             body["results"][0],
             {
                 "rank": 1,
@@ -189,12 +225,7 @@ class CalculateSimilarityTest(unittest.TestCase):
                 "organizationName": "組織P002",
                 "businessUnitName": "BUP002",
                 "similarityScore": 1.0,
-                "chartSkills": [
-                    {"skillId": "S0", "skillName": "スキル0", "level": 5},
-                    {"skillId": "S1", "skillName": "スキル1", "level": 4},
-                    {"skillId": "S2", "skillName": "スキル2", "level": 0},
-                    {"skillId": "S3", "skillName": "スキル3", "level": 0},
-                ],
+                "chartValues": [5, 4, 0],
             },
         )
         self.assertEqual(body["results"][1]["positionId"], "P003")
@@ -245,6 +276,7 @@ def _position_skill_items(position_id, levels):
             "positionId": position_id,
             "skillId": f"S{index}",
             "skillName": f"スキル{index}",
+            "lightcastCategory": "CategoryA" if index < 2 else "CategoryB",
             "organizationName": f"組織{position_id}",
             "businessUnitName": f"BU{position_id}",
             "level": level,

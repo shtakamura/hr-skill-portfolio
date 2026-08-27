@@ -7,6 +7,7 @@ type PositionSkillsApiSkill = {
   skillId: string;
   skillName: string;
   level: number;
+  lightcastCategory?: string;
 };
 
 type PositionSkillsApiResponse = {
@@ -24,12 +25,13 @@ type SimilarPositionApiItem = {
   organizationName: string;
   businessUnitName: string;
   similarityScore: number;
-  chartSkills: PositionSkillsApiSkill[];
+  chartValues: number[];
 };
 
 type SimilarPositionsApiResponse = {
   dataFound: boolean;
   selectedPositionId: string;
+  chartAxis: Array<Pick<PositionSkillsApiSkill, "skillId" | "skillName">>;
   results: SimilarPositionApiItem[];
 };
 
@@ -64,6 +66,7 @@ export const mapApiResponseToProfile = (
       skillName: skill.skillName,
       level: skill.level,
       maxLevel: 5,
+      ...(skill.lightcastCategory ? { lightcastCategory: skill.lightcastCategory } : {}),
     }));
 
   if (!response.dataFound) {
@@ -124,15 +127,15 @@ export const mapSimilarPositionsResponse = (response: SimilarPositionsApiRespons
     positionName: position.positionName,
     departmentName: position.organizationName,
     businessUnitName: position.businessUnitName,
-    skills: position.chartSkills
-      .filter((skill) => skill.skillName && isValidLevel(skill.level))
-      .slice(0, 10)
-      .map((skill, index) => ({
-        skillId: skill.skillId || `${position.positionId}-${index}`,
-        skillName: skill.skillName,
-        level: skill.level,
+    skills: response.chartAxis.slice(0, 10).map((axis, index) => {
+      const level = position.chartValues[index] ?? 0;
+      return {
+        skillId: axis.skillId,
+        skillName: axis.skillName,
+        level: isValidLevel(level) ? level : 0,
         maxLevel: 5,
-      })),
+      };
+    }),
     similarityScore: position.similarityScore,
   }));
 };

@@ -139,6 +139,10 @@ describe("skillProfileService", () => {
     const positions = mapSimilarPositionsResponse({
       dataFound: true,
       selectedPositionId: "POS00005648",
+      chartAxis: [
+        { skillId: "s1", skillName: "リーダーシップ" },
+        { skillId: "s2", skillName: "営業戦略" },
+      ],
       results: [
         {
           rank: 1,
@@ -147,10 +151,7 @@ describe("skillProfileService", () => {
           organizationName: "営業第一部",
           businessUnitName: "COO・オペレーションBU",
           similarityScore: 0.81,
-          chartSkills: [
-            { skillId: "s1", skillName: "リーダーシップ", level: 5 },
-            { skillId: "s2", skillName: "営業戦略", level: 4 },
-          ],
+          chartValues: [5, 4],
         },
         {
           rank: 2,
@@ -159,7 +160,7 @@ describe("skillProfileService", () => {
           organizationName: "営業企画部",
           businessUnitName: "COO・オペレーションBU",
           similarityScore: 0.74,
-          chartSkills: [{ skillId: "s3", skillName: "営業管理", level: 4 }],
+          chartValues: [3, 0],
         },
       ],
     });
@@ -183,14 +184,17 @@ describe("skillProfileService", () => {
         positionName: "営業企画マネージャー",
         departmentName: "営業企画部",
         businessUnitName: "COO・オペレーションBU",
-        skills: [{ skillId: "s3", skillName: "営業管理", level: 4, maxLevel: 5 }],
+        skills: [
+          { skillId: "s1", skillName: "リーダーシップ", level: 3, maxLevel: 5 },
+          { skillId: "s2", skillName: "営業戦略", level: 0, maxLevel: 5 },
+        ],
         similarityScore: 0.74,
       },
     ]);
   });
 
   it("returns no similar positions when API has no evaluated data", () => {
-    expect(mapSimilarPositionsResponse({ dataFound: false, selectedPositionId: "POS", results: [] })).toEqual([]);
+    expect(mapSimilarPositionsResponse({ dataFound: false, selectedPositionId: "POS", chartAxis: [], results: [] })).toEqual([]);
   });
 
   it("does not hide similar-position API errors", async () => {

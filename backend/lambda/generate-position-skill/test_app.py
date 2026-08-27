@@ -98,8 +98,8 @@ class GeneratePositionSkillTest(unittest.TestCase):
         self.assertEqual(
             skills,
             [
-                {"skillId": "s2", "skillName": "予算管理"},
-                {"skillId": "s1", "skillName": "人材育成"},
+                {"skillId": "s2", "skillName": "予算管理", "lightcastCategory": ""},
+                {"skillId": "s1", "skillName": "人材育成", "lightcastCategory": ""},
             ],
         )
         self.assertEqual(table.scan_calls, 2)
@@ -191,9 +191,24 @@ class GeneratePositionSkillTest(unittest.TestCase):
         self.assertEqual(
             result["skillLevels"],
             [
-                {"skillId": "s000", "skillName": "スキル000", "level": 0},
-                {"skillId": "s001", "skillName": "スキル001", "level": 4},
-                {"skillId": "s002", "skillName": "スキル002", "level": 3},
+                {
+                    "skillId": "s000",
+                    "skillName": "スキル000",
+                    "lightcastCategory": "",
+                    "level": 0,
+                },
+                {
+                    "skillId": "s001",
+                    "skillName": "スキル001",
+                    "lightcastCategory": "",
+                    "level": 4,
+                },
+                {
+                    "skillId": "s002",
+                    "skillName": "スキル002",
+                    "lightcastCategory": "",
+                    "level": 3,
+                },
             ],
         )
         self.assertEqual(result["usage"]["inputTokens"], 11)
@@ -327,6 +342,7 @@ class GeneratePositionSkillTest(unittest.TestCase):
 
         self.assertEqual(count, 2)
         self.assertEqual(table.items[0]["level"], 0)
+        self.assertIn("lightcastCategory", table.items[0])
         self.assertNotIn("reason", table.items[0])
         self.assertNotIn("usage", table.items[0])
         self.assertNotIn("stop_reason", table.items[0])
@@ -473,7 +489,11 @@ def _position():
 
 def _skill_master(count):
     return [
-        {"skillId": f"s{index:03}", "skillName": f"スキル{index:03}"}
+        {
+            "skillId": f"s{index:03}",
+            "skillName": f"スキル{index:03}",
+            "lightcastCategory": "",
+        }
         for index in range(count)
     ]
 
