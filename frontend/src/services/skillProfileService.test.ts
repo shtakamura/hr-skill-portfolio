@@ -6,11 +6,11 @@ import {
   getPositionSkillProfile,
   mapApiResponseToProfile,
   sampleProfileForPosition,
-  shouldQueryByPositionId,
 } from "./skillProfileService";
 
 const position: Position = {
   positionId: "P002-03",
+  organizationId: "ORG001",
   positionName: "スペシャリスト",
   departmentName: "システム開発部",
   businessUnitName: "CTO・テクノロジーBU",
@@ -29,16 +29,9 @@ afterEach(() => {
 });
 
 describe("skillProfileService", () => {
-  it("passes through POS positionId when it is available", () => {
-    expect(shouldQueryByPositionId("POS00005648")).toBe(true);
+  it("always queries position skills by positionId", () => {
     expect(buildPositionSkillsUrl(apiPosition)).toBe("/position-skills?positionId=POS00005648");
-  });
-
-  it("uses organizationName and positionName when the list id is not a POS code", () => {
-    expect(shouldQueryByPositionId(position.positionId)).toBe(false);
-    expect(buildPositionSkillsUrl(position)).toBe(
-      "/position-skills?organizationName=%E3%82%B7%E3%82%B9%E3%83%86%E3%83%A0%E9%96%8B%E7%99%BA%E9%83%A8&positionName=%E3%82%B9%E3%83%9A%E3%82%B7%E3%83%A3%E3%83%AA%E3%82%B9%E3%83%88",
-    );
+    expect(buildPositionSkillsUrl(position)).toBe("/position-skills?positionId=P002-03");
   });
 
   it("maps API data to radar chart skills without changing Japanese names", () => {

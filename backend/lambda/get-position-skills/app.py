@@ -1,8 +1,6 @@
 import json
 import logging
 import os
-import re
-import unicodedata
 from decimal import Decimal
 from typing import Any
 
@@ -13,7 +11,6 @@ from botocore.exceptions import BotoCoreError, ClientError
 logger = logging.getLogger()
 logger.setLevel(logging.INFO)
 
-POSITION_NAME_INDEX_NAME = "organizationName-positionName-index"
 MAX_SKILL_COUNT = 10
 
 
@@ -24,39 +21,24 @@ def handler(event: dict[str, Any], _context: Any) -> dict[str, Any]:
         return _response(500, {"message": "Required environment variables are missing"})
 
     params = event.get("queryStringParameters") or {}
-    position_id = _normalize(params.get("positionId"))
-    organization_name = _normalize(params.get("organizationName"))
-    position_name = _normalize(params.get("positionName"))
+    position_id = _normalize_id(params.get("positionId"))
 
-    if not position_id and (not organization_name or not position_name):
-        return _response(
-            400,
-            {
-                "message": "positionId or both organizationName and positionName are required"
-            },
-        )
+    if not position_id:
+        return _response(400, {"message": "positionId is required"})
 
     try:
         table = boto3.resource("dynamodb").Table(table_name)
-        if position_id:
-            search_method = "positionId"
-            items = _query_by_position_id(table, position_id)
-        else:
-            search_method = "organizationName+positionName"
-            items = _query_by_position_name(table, organization_name, position_name)
-            items = _only_unique_position_items(items)
+        items = _query_by_position_id(table, position_id)
 
         response_body = _build_response(
             items,
             requested_position_id=position_id or None,
-            requested_organization_name=organization_name or None,
-            requested_position_name=position_name or None,
         )
 
         logger.info(
             "Position skills lookup: searchMethod=%s positionId=%s resultCount=%s "
             "validSkillCount=%s topSkillCount=%s dataFound=%s",
-            search_method,
+            "positionId",
             response_body["positionId"],
             len(items),
             response_body["validSkillCount"],
@@ -87,30 +69,9 @@ def _query_by_position_id(table: Any, position_id: str) -> list[dict[str, Any]]:
     return items
 
 
-def _query_by_position_name(
-    table: Any, organization_name: str, position_name: str
-) -> list[dict[str, Any]]:
-    items: list[dict[str, Any]] = []
-    query_kwargs: dict[str, Any] = {
-        "IndexName": POSITION_NAME_INDEX_NAME,
-        "KeyConditionExpression": Key("organizationName").eq(organization_name)
-        & Key("positionName").eq(position_name),
-    }
-    while True:
-        response = table.query(**query_kwargs)
-        items.extend(response.get("Items", []))
-        last_key = response.get("LastEvaluatedKey")
-        if not last_key:
-            break
-        query_kwargs["ExclusiveStartKey"] = last_key
-    return items
-
-
 def _build_response(
     items: list[dict[str, Any]],
     requested_position_id: str | None,
-    requested_organization_name: str | None,
-    requested_position_name: str | None,
 ) -> dict[str, Any]:
     valid_skills = _valid_skill_items(items)
     selected_skills = _top_skills(valid_skills)
@@ -123,44 +84,25 @@ def _build_response(
             first_item.get("positionId") if data_found else requested_position_id
         ),
         "organizationName": (
-            first_item.get("organizationName")
-            if data_found
-            else requested_organization_name
+            first_item.get("organizationName") if data_found else None
         ),
-        "positionName": (
-            first_item.get("positionName") if data_found else requested_position_name
-        ),
+        "positionName": (first_item.get("positionName") if data_found else None),
         "skills": selected_skills,
         "validSkillCount": len(valid_skills),
     }
-
-
-def _only_unique_position_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    position_ids = {
-        _normalize(item.get("positionId"))
-        for item in items
-        if _normalize(item.get("positionId"))
-    }
-    if len(position_ids) <= 1:
-        return items
-    logger.warning(
-        "Ambiguous PositionSkill name lookup excluded: matchedPositionCount=%s",
-        len(position_ids),
-    )
-    return []
 
 
 def _valid_skill_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     skills: list[dict[str, Any]] = []
     seen_skill_ids: set[str] = set()
     for item in items:
-        skill_id = _normalize(item.get("skillId"))
-        skill_name = _normalize(item.get("skillName"))
+        skill_id = _normalize_id(item.get("skillId"))
+        skill_name = _normalize_text(item.get("skillName"))
         level = _parse_level(item.get("level"))
         if not skill_id or not skill_name or level is None:
             logger.warning(
                 "Invalid PositionSkill item excluded: positionId=%s skillId=%s",
-                _normalize(item.get("positionId")),
+                _normalize_id(item.get("positionId")),
                 skill_id or "",
             )
             continue
@@ -191,11 +133,16 @@ def _parse_level(value: Any) -> int | None:
     return level
 
 
-def _normalize(value: Any) -> str:
+def _normalize_id(value: Any) -> str:
     if value is None:
         return ""
-    text = unicodedata.normalize("NFKC", str(value).strip())
-    return re.sub(r"\s+", " ", text)
+    return str(value).strip()
+
+
+def _normalize_text(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).strip()
 
 
 def _response(status_code: int, body: dict[str, Any]) -> dict[str, Any]:

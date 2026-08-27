@@ -57,14 +57,32 @@ export class HrSkillPortfolioStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY
     });
 
-    positionSkillTable.addGlobalSecondaryIndex({
-      indexName: "organizationName-positionName-index",
+    const organizationMasterTable = new dynamodb.Table(this, "OrganizationMasterTable", {
+      tableName: "OrganizationMaster",
       partitionKey: {
-        name: "organizationName",
+        name: "organizationId",
         type: dynamodb.AttributeType.STRING
       },
-      sortKey: {
-        name: "positionName",
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    const positionMasterTable = new dynamodb.Table(this, "PositionMasterTable", {
+      tableName: "PositionMaster",
+      partitionKey: {
+        name: "positionId",
+        type: dynamodb.AttributeType.STRING
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      pointInTimeRecovery: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY
+    });
+
+    positionMasterTable.addGlobalSecondaryIndex({
+      indexName: "organizationId-index",
+      partitionKey: {
+        name: "organizationId",
         type: dynamodb.AttributeType.STRING
       },
       projectionType: dynamodb.ProjectionType.ALL
@@ -95,7 +113,23 @@ export class HrSkillPortfolioStack extends cdk.Stack {
         BEDROCK_MODEL_ID: "jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
         S3_BUCKET_NAME: portfolioBucket.bucketName,
         SKILL_MASTER_TABLE_NAME: skillMasterTable.tableName,
-        POSITION_SKILL_TABLE_NAME: positionSkillTable.tableName
+        POSITION_SKILL_TABLE_NAME: positionSkillTable.tableName,
+        ORGANIZATION_MASTER_TABLE_NAME: organizationMasterTable.tableName,
+        POSITION_MASTER_TABLE_NAME: positionMasterTable.tableName
+      }
+    });
+
+    const getPositionMasterFunction = new lambda.Function(this, "GetPositionMasterFunction", {
+      functionName: "get-position-master",
+      runtime: lambda.Runtime.PYTHON_3_12,
+      code: lambda.Code.fromAsset("../../backend/lambda/get-position-master"),
+      handler: "app.handler",
+      memorySize: 512,
+      timeout: cdk.Duration.seconds(30),
+      environment: {
+        ORGANIZATION_MASTER_TABLE_NAME: organizationMasterTable.tableName,
+        POSITION_MASTER_TABLE_NAME: positionMasterTable.tableName,
+        CORS_ALLOW_ORIGIN: "http://localhost:5173"
       }
     });
 
@@ -124,6 +158,8 @@ export class HrSkillPortfolioStack extends cdk.Stack {
 
     skillMasterTable.grantReadData(evaluatePositionSkillFunction);
     positionSkillTable.grantWriteData(evaluatePositionSkillFunction);
+    organizationMasterTable.grantReadWriteData(evaluatePositionSkillFunction);
+    positionMasterTable.grantReadWriteData(evaluatePositionSkillFunction);
     portfolioBucket.grantRead(evaluatePositionSkillFunction);
     evaluatePositionSkillFunction.addToRolePolicy(
       new iam.PolicyStatement({
@@ -134,6 +170,8 @@ export class HrSkillPortfolioStack extends cdk.Stack {
     );
 
     positionSkillTable.grantReadData(getPositionSkillsFunction);
+  organizationMasterTable.grantReadData(getPositionMasterFunction);
+  positionMasterTable.grantReadData(getPositionMasterFunction);
 
     const api = new apigateway.RestApi(this, "HrSkillPortfolioApi", {
       restApiName: "hr-skill-portfolio-api",
@@ -151,6 +189,14 @@ export class HrSkillPortfolioStack extends cdk.Stack {
       .addResource("position-skills")
       .addMethod("GET", new apigateway.LambdaIntegration(getPositionSkillsFunction));
 
+    api.root
+      .addResource("organizations")
+      .addMethod("GET", new apigateway.LambdaIntegration(getPositionMasterFunction));
+
+    api.root
+      .addResource("positions")
+      .addMethod("GET", new apigateway.LambdaIntegration(getPositionMasterFunction));
+
     const distribution = new cloudfront.Distribution(this, "FrontendDistribution", {
       defaultRootObject: "index.html",
       defaultBehavior: {
@@ -159,6 +205,26 @@ export class HrSkillPortfolioStack extends cdk.Stack {
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED
       },
       additionalBehaviors: {
+        organizations: {
+          origin: new origins.HttpOrigin(
+            `${api.restApiId}.execute-api.${cdk.Stack.of(this).region}.${cdk.Stack.of(this).urlSuffix}`,
+            { originPath: `/${api.deploymentStage.stageName}` }
+          ),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER
+        },
+        positions: {
+          origin: new origins.HttpOrigin(
+            `${api.restApiId}.execute-api.${cdk.Stack.of(this).region}.${cdk.Stack.of(this).urlSuffix}`,
+            { originPath: `/${api.deploymentStage.stageName}` }
+          ),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER
+        },
         "position-skills": {
           origin: new origins.HttpOrigin(
             `${api.restApiId}.execute-api.${cdk.Stack.of(this).region}.${cdk.Stack.of(this).urlSuffix}`,
@@ -217,6 +283,14 @@ export class HrSkillPortfolioStack extends cdk.Stack {
       value: positionSkillTable.tableName
     });
 
+    new cdk.CfnOutput(this, "OrganizationMasterTableName", {
+      value: organizationMasterTable.tableName
+    });
+
+    new cdk.CfnOutput(this, "PositionMasterTableName", {
+      value: positionMasterTable.tableName
+    });
+
     new cdk.CfnOutput(this, "GenerateSkillMasterFunctionName", {
       value: generateSkillMasterFunction.functionName
     });
@@ -227,6 +301,10 @@ export class HrSkillPortfolioStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, "GetPositionSkillsFunctionName", {
       value: getPositionSkillsFunction.functionName
+    });
+
+    new cdk.CfnOutput(this, "GetPositionMasterFunctionName", {
+      value: getPositionMasterFunction.functionName
     });
 
     new cdk.CfnOutput(this, "ApiUrl", {

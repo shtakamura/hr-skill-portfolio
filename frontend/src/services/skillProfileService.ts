@@ -22,16 +22,8 @@ const apiBaseUrl = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 const isValidLevel = (level: unknown): level is number =>
   typeof level === "number" && Number.isInteger(level) && level >= 0 && level <= 5;
 
-export const shouldQueryByPositionId = (positionId: string): boolean => /^POS\d+$/u.test(positionId);
-
 export const buildPositionSkillsUrl = (position: Position): string => {
-  const params = new URLSearchParams();
-  if (shouldQueryByPositionId(position.positionId)) {
-    params.set("positionId", position.positionId);
-  } else {
-    params.set("organizationName", position.departmentName);
-    params.set("positionName", position.positionName);
-  }
+  const params = new URLSearchParams({ positionId: position.positionId });
   return `${apiBaseUrl}/position-skills?${params.toString()}`;
 };
 

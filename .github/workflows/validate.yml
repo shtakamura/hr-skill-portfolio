@@ -89,3 +89,7 @@ jobs:
       - name: Run position skill API tests
         working-directory: backend/lambda/get-position-skills
         run: python -m unittest test_app.py -v
+
+      - name: Run position master API tests
+        working-directory: backend/lambda/get-position-master
+        run: python -m unittest test_app.py -v
