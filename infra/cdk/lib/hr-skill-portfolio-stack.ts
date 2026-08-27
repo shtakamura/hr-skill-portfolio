@@ -59,6 +59,21 @@ export class HrSkillPortfolioStack extends cdk.Stack {
       }
     });
 
+    const evaluatePositionSkillFunction = new lambda.Function(this, "EvaluatePositionSkillFunction", {
+      functionName: "evaluate-position-skill",
+      runtime: lambda.Runtime.PYTHON_3_12,
+      code: lambda.Code.fromAsset("../../backend/lambda/generate-position-skill"),
+      handler: "app.handler",
+      memorySize: 1024,
+      timeout: cdk.Duration.seconds(120),
+      environment: {
+        BEDROCK_MODEL_ID: "jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        S3_BUCKET_NAME: portfolioBucket.bucketName,
+        SKILL_MASTER_TABLE_NAME: skillMasterTable.tableName,
+        POSITION_SKILL_TABLE_NAME: positionSkillTable.tableName
+      }
+    });
+
     skillMasterTable.grantReadWriteData(generateSkillMasterFunction);
     portfolioBucket.grantRead(generateSkillMasterFunction);
     generateSkillMasterFunction.addToRolePolicy(
@@ -69,10 +84,27 @@ export class HrSkillPortfolioStack extends cdk.Stack {
       })
     );
 
+    skillMasterTable.grantReadData(evaluatePositionSkillFunction);
+    positionSkillTable.grantWriteData(evaluatePositionSkillFunction);
+    portfolioBucket.grantRead(evaluatePositionSkillFunction);
+    evaluatePositionSkillFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ["bedrock:InvokeModel"],
+        resources: ["*"]
+      })
+    );
+
     portfolioBucket.addEventNotification(
       s3.EventType.OBJECT_CREATED,
       new s3n.LambdaDestination(generateSkillMasterFunction),
-      { suffix: ".csv" }
+      { prefix: "skill-master-input/", suffix: ".csv" }
+    );
+
+    portfolioBucket.addEventNotification(
+      s3.EventType.OBJECT_CREATED,
+      new s3n.LambdaDestination(evaluatePositionSkillFunction),
+      { prefix: "position-input/", suffix: ".csv" }
     );
 
     new cdk.CfnOutput(this, "PortfolioBucketName", {
@@ -89,6 +121,10 @@ export class HrSkillPortfolioStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, "GenerateSkillMasterFunctionName", {
       value: generateSkillMasterFunction.functionName
+    });
+
+    new cdk.CfnOutput(this, "EvaluatePositionSkillFunctionName", {
+      value: evaluatePositionSkillFunction.functionName
     });
   }
 }
