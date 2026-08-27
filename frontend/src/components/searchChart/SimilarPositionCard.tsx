@@ -1,4 +1,5 @@
 import { Box, Paper, Typography } from "@mui/material";
+import { MiniSkillRadarChart } from "../chart/MiniSkillRadarChart";
 import type { SimilarPosition } from "../../types/skillProfile";
 
 type SimilarPositionCardProps = {
@@ -26,8 +27,8 @@ export const SimilarPositionCard = ({ position, selected, onSelect }: SimilarPos
       onKeyDown={handleKeyDown}
       sx={{
         position: "relative",
-        minHeight: 116,
-        p: 1.25,
+        minHeight: 238,
+        p: 1.5,
         borderRadius: 1,
         borderColor: selected ? "#d00000" : "#d8dadd",
         borderWidth: selected ? 2 : 1,
@@ -57,19 +58,23 @@ export const SimilarPositionCard = ({ position, selected, onSelect }: SimilarPos
       >
         {position.rank}
       </Box>
-      <Box sx={{ display: "grid", gridTemplateColumns: "92px 1fr", gap: 1, alignItems: "center", pt: 1.25 }}>
-        <Box sx={{ minHeight: 72, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <Typography sx={{ color: selected ? "#d00000" : "text.secondary", fontSize: "1.2rem", fontWeight: 800 }}>
-            {similarityPercent}%
-          </Typography>
-        </Box>
-        <Box sx={{ minHeight: 72, display: "grid", alignContent: "center", gap: 0.5 }}>
-          <Typography sx={{ fontSize: "0.78rem", fontWeight: 800, lineHeight: 1.4 }}>
+      <Box sx={{ display: "grid", gap: 1, pt: 2.25 }}>
+        <Box sx={{ minHeight: 72, display: "grid", alignContent: "center", gap: 0.35 }}>
+          <Typography sx={{ fontSize: "0.86rem", fontWeight: 800, lineHeight: 1.35 }}>
             {position.positionName || "未評価ポジション"}
+          </Typography>
+          <Typography color="text.secondary" sx={{ fontSize: "0.72rem", fontWeight: 700, lineHeight: 1.35 }}>
+            {position.departmentName || "-"}
+          </Typography>
+          <Typography color="text.secondary" sx={{ fontSize: "0.68rem", lineHeight: 1.35 }}>
+            {position.businessUnitName || "-"}
           </Typography>
           <Typography color="text.secondary" sx={{ fontSize: "0.72rem", fontWeight: 700 }}>
             類似度: {similarityPercent}%
           </Typography>
+        </Box>
+        <Box sx={{ display: "flex", justifyContent: "center" }}>
+          <MiniSkillRadarChart skills={position.skills} />
         </Box>
       </Box>
     </Paper>

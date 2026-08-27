@@ -27,7 +27,7 @@ class CalculateSimilarityTest(unittest.TestCase):
         os.environ["POSITION_MASTER_TABLE_NAME"] = "PositionMaster"
         os.environ["CORS_ALLOW_ORIGIN"] = "https://example.cloudfront.net"
 
-    def test_core_skill_ids_use_mean_plus_standard_deviation(self):
+    def test_core_skill_keys_use_mean_plus_standard_deviation(self):
         skills = [
             {"skillId": "A", "level": 5},
             {"skillId": "B", "level": 4},
@@ -35,13 +35,22 @@ class CalculateSimilarityTest(unittest.TestCase):
             {"skillId": "D", "level": 0},
         ]
 
-        self.assertEqual(app._core_skill_ids(skills), {"A"})
+        self.assertEqual(app._core_skill_keys(skills), {("A", 5)})
 
     def test_jaccard_similarity(self):
         self.assertEqual(
-            app._jaccard_similarity({"A", "B", "C", "D"}, {"A", "C", "E"}), 0.4
+            app._jaccard_similarity(
+                {("A", 5), ("B", 4), ("C", 3), ("D", 2)},
+                {("A", 5), ("C", 3), ("E", 1)},
+            ),
+            0.4,
         )
         self.assertEqual(app._jaccard_similarity(set(), set()), 0.0)
+
+    def test_same_skill_with_different_level_is_not_a_core_match(self):
+        self.assertEqual(
+            app._jaccard_similarity({("Leadership", 5)}, {("Leadership", 4)}), 0.0
+        )
 
     def test_group_position_skills_excludes_invalid_levels_and_bool(self):
         grouped = app._group_position_skills(
@@ -71,7 +80,7 @@ class CalculateSimilarityTest(unittest.TestCase):
         self.assertEqual([skill["skillId"] for skill in grouped["P1"]], ["A", "B"])
         self.assertNotIn("P2", grouped)
 
-    def test_rank_similar_positions_excludes_selected_and_limits_top20(self):
+    def test_rank_similar_positions_excludes_selected_and_limits_top9(self):
         skills_by_position = {
             "P000": _skills([5, 4, 1, 0]),
             "P001": _skills([5, 4, 0, 0]),
@@ -85,15 +94,41 @@ class CalculateSimilarityTest(unittest.TestCase):
 
         results = app._rank_similar_positions(
             "P000",
-            app._core_skill_ids(skills_by_position["P000"]),
+            app._core_skill_keys(skills_by_position["P000"]),
             skills_by_position,
             names,
         )
 
-        self.assertEqual(len(results), 20)
+        self.assertEqual(len(results), 9)
         self.assertEqual(results[0]["rank"], 1)
         self.assertEqual(results[0]["positionId"], "P001")
         self.assertNotIn("P000", [result["positionId"] for result in results])
+
+    def test_chart_skills_are_top10_by_level_then_skill_name(self):
+        skills = [
+            {"skillId": f"s{index}", "skillName": skill_name, "level": level}
+            for index, (skill_name, level) in enumerate(
+                [
+                    ("K", 1),
+                    ("B", 5),
+                    ("A", 5),
+                    ("C", 4),
+                    ("D", 4),
+                    ("E", 3),
+                    ("F", 3),
+                    ("G", 2),
+                    ("H", 2),
+                    ("I", 1),
+                    ("J", 1),
+                ]
+            )
+        ]
+
+        chart_skills = app._chart_skills(skills)
+
+        self.assertEqual(len(chart_skills), 10)
+        self.assertEqual([skill["skillName"] for skill in chart_skills[:2]], ["A", "B"])
+        self.assertNotIn("K", [skill["skillName"] for skill in chart_skills])
 
     def test_handler_returns_ranked_similarity_without_aws(self):
         fake_boto3 = FakeBoto3(
@@ -151,7 +186,15 @@ class CalculateSimilarityTest(unittest.TestCase):
                 "rank": 1,
                 "positionId": "P002",
                 "positionName": "近いポジション",
+                "organizationName": "組織P002",
+                "businessUnitName": "BUP002",
                 "similarityScore": 1.0,
+                "chartSkills": [
+                    {"skillId": "S0", "skillName": "スキル0", "level": 5},
+                    {"skillId": "S1", "skillName": "スキル1", "level": 4},
+                    {"skillId": "S2", "skillName": "スキル2", "level": 0},
+                    {"skillId": "S3", "skillName": "スキル3", "level": 0},
+                ],
             },
         )
         self.assertEqual(body["results"][1]["positionId"], "P003")
@@ -202,6 +245,8 @@ def _position_skill_items(position_id, levels):
             "positionId": position_id,
             "skillId": f"S{index}",
             "skillName": f"スキル{index}",
+            "organizationName": f"組織{position_id}",
+            "businessUnitName": f"BU{position_id}",
             "level": level,
         }
         for index, level in enumerate(levels)
