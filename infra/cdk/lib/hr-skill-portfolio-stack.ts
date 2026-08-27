@@ -147,6 +147,20 @@ export class HrSkillPortfolioStack extends cdk.Stack {
       }
     });
 
+    const calculateSimilarityFunction = new lambda.Function(this, "CalculateSimilarityFunction", {
+      functionName: "calculate-similarity",
+      runtime: lambda.Runtime.PYTHON_3_12,
+      code: lambda.Code.fromAsset("../../backend/lambda/calculate-similarity"),
+      handler: "app.handler",
+      memorySize: 512,
+      timeout: cdk.Duration.seconds(30),
+      environment: {
+        POSITION_SKILL_TABLE_NAME: positionSkillTable.tableName,
+        POSITION_MASTER_TABLE_NAME: positionMasterTable.tableName,
+        CORS_ALLOW_ORIGIN: "http://localhost:5173"
+      }
+    });
+
     skillMasterTable.grantReadWriteData(generateSkillMasterFunction);
     portfolioBucket.grantRead(generateSkillMasterFunction);
     generateSkillMasterFunction.addToRolePolicy(
@@ -171,6 +185,8 @@ export class HrSkillPortfolioStack extends cdk.Stack {
     );
 
     positionSkillTable.grantReadData(getPositionSkillsFunction);
+    positionSkillTable.grantReadData(calculateSimilarityFunction);
+    positionMasterTable.grantReadData(calculateSimilarityFunction);
     organizationMasterTable.grantReadData(getPositionMasterFunction);
     positionMasterTable.grantReadData(getPositionMasterFunction);
 
@@ -197,6 +213,10 @@ export class HrSkillPortfolioStack extends cdk.Stack {
     api.root
       .addResource("positions")
       .addMethod("GET", new apigateway.LambdaIntegration(getPositionMasterFunction));
+
+    api.root
+      .addResource("similar-positions")
+      .addMethod("GET", new apigateway.LambdaIntegration(calculateSimilarityFunction));
 
     const distribution = new cloudfront.Distribution(this, "FrontendDistribution", {
       defaultRootObject: "index.html",
@@ -227,6 +247,16 @@ export class HrSkillPortfolioStack extends cdk.Stack {
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER
         },
         "position-skills": {
+          origin: new origins.HttpOrigin(
+            `${api.restApiId}.execute-api.${cdk.Stack.of(this).region}.${cdk.Stack.of(this).urlSuffix}`,
+            { originPath: `/${api.deploymentStage.stageName}` }
+          ),
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER
+        },
+        "similar-positions": {
           origin: new origins.HttpOrigin(
             `${api.restApiId}.execute-api.${cdk.Stack.of(this).region}.${cdk.Stack.of(this).urlSuffix}`,
             { originPath: `/${api.deploymentStage.stageName}` }
@@ -306,6 +336,10 @@ export class HrSkillPortfolioStack extends cdk.Stack {
 
     new cdk.CfnOutput(this, "GetPositionMasterFunctionName", {
       value: getPositionMasterFunction.functionName
+    });
+
+    new cdk.CfnOutput(this, "CalculateSimilarityFunctionName", {
+      value: calculateSimilarityFunction.functionName
     });
 
     new cdk.CfnOutput(this, "ApiUrl", {

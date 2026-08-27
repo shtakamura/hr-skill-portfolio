@@ -25,14 +25,20 @@ export const SimilarPositionGrid = ({ positions, selectedRank, onSelectRank }: S
         gap: 1,
       }}
     >
-      {positions.map((position) => (
-        <SimilarPositionCard
-          key={position.rank}
-          position={position}
-          selected={selectedRank === position.rank}
-          onSelect={onSelectRank}
-        />
-      ))}
+      {positions.length > 0 ? (
+        positions.map((position) => (
+          <SimilarPositionCard
+            key={position.positionId}
+            position={position}
+            selected={selectedRank === position.rank}
+            onSelect={onSelectRank}
+          />
+        ))
+      ) : (
+        <Typography color="text.secondary" sx={{ gridColumn: "1 / -1", py: 4, textAlign: "center", fontWeight: 700 }}>
+          類似ポジションを表示できる評価済みデータがありません
+        </Typography>
+      )}
     </Box>
   </Box>
 );

@@ -18,11 +18,12 @@ export type PositionSkillProfile = {
 
 export type SimilarPosition = {
   rank: number;
-  positionId: string | null;
+  positionId: string;
   positionName: string;
   departmentName: string;
   businessUnitName: string;
   skills: SkillLevel[];
+  similarityScore: number;
 };
 
 export type SimilaritySearchResult = {
