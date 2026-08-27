@@ -140,8 +140,27 @@ describe("skillProfileService", () => {
       dataFound: true,
       selectedPositionId: "POS00005648",
       results: [
-        { rank: 1, positionId: "POS00000001", positionName: "営業第一部マネージャー", similarityScore: 0.81 },
-        { rank: 2, positionId: "POS00000002", positionName: "営業企画マネージャー", similarityScore: 0.74 },
+        {
+          rank: 1,
+          positionId: "POS00000001",
+          positionName: "営業第一部マネージャー",
+          organizationName: "営業第一部",
+          businessUnitName: "COO・オペレーションBU",
+          similarityScore: 0.81,
+          chartSkills: [
+            { skillId: "s1", skillName: "リーダーシップ", level: 5 },
+            { skillId: "s2", skillName: "営業戦略", level: 4 },
+          ],
+        },
+        {
+          rank: 2,
+          positionId: "POS00000002",
+          positionName: "営業企画マネージャー",
+          organizationName: "営業企画部",
+          businessUnitName: "COO・オペレーションBU",
+          similarityScore: 0.74,
+          chartSkills: [{ skillId: "s3", skillName: "営業管理", level: 4 }],
+        },
       ],
     });
 
@@ -150,18 +169,21 @@ describe("skillProfileService", () => {
         rank: 1,
         positionId: "POS00000001",
         positionName: "営業第一部マネージャー",
-        departmentName: "",
-        businessUnitName: "",
-        skills: [],
+        departmentName: "営業第一部",
+        businessUnitName: "COO・オペレーションBU",
+        skills: [
+          { skillId: "s1", skillName: "リーダーシップ", level: 5, maxLevel: 5 },
+          { skillId: "s2", skillName: "営業戦略", level: 4, maxLevel: 5 },
+        ],
         similarityScore: 0.81,
       },
       {
         rank: 2,
         positionId: "POS00000002",
         positionName: "営業企画マネージャー",
-        departmentName: "",
-        businessUnitName: "",
-        skills: [],
+        departmentName: "営業企画部",
+        businessUnitName: "COO・オペレーションBU",
+        skills: [{ skillId: "s3", skillName: "営業管理", level: 4, maxLevel: 5 }],
         similarityScore: 0.74,
       },
     ]);

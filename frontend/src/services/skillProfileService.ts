@@ -21,7 +21,10 @@ type SimilarPositionApiItem = {
   rank: number;
   positionId: string;
   positionName: string;
+  organizationName: string;
+  businessUnitName: string;
   similarityScore: number;
+  chartSkills: PositionSkillsApiSkill[];
 };
 
 type SimilarPositionsApiResponse = {
@@ -115,13 +118,21 @@ export const mapSimilarPositionsResponse = (response: SimilarPositionsApiRespons
   if (!response.dataFound) {
     return [];
   }
-  return response.results.slice(0, 20).map((position) => ({
+  return response.results.slice(0, 9).map((position) => ({
     rank: position.rank,
     positionId: position.positionId,
     positionName: position.positionName,
-    departmentName: "",
-    businessUnitName: "",
-    skills: [],
+    departmentName: position.organizationName,
+    businessUnitName: position.businessUnitName,
+    skills: position.chartSkills
+      .filter((skill) => skill.skillName && isValidLevel(skill.level))
+      .slice(0, 10)
+      .map((skill, index) => ({
+        skillId: skill.skillId || `${position.positionId}-${index}`,
+        skillName: skill.skillName,
+        level: skill.level,
+        maxLevel: 5,
+      })),
     similarityScore: position.similarityScore,
   }));
 };
