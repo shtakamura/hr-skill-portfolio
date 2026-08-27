@@ -398,7 +398,8 @@ def _load_skill_master(table_name: str) -> list[dict[str, str]]:
         for item in response.get("Items", []):
             skill_id = _normalize_cell(item.get("skillId"))
             skill_name = _normalize_cell(item.get("skillName"))
-            lightcast_category = _normalize_cell(item.get("lightcastCategory"))
+            category = _normalize_cell(item.get("category"))
+            subcategory = _normalize_cell(item.get("subcategory"))
             if not skill_id or not skill_name:
                 continue
             if skill_id in seen_skill_ids:
@@ -408,7 +409,8 @@ def _load_skill_master(table_name: str) -> list[dict[str, str]]:
                 {
                     "skillId": skill_id,
                     "skillName": skill_name,
-                    "lightcastCategory": lightcast_category,
+                    "category": category,
+                    "subcategory": subcategory,
                 }
             )
         last_key = response.get("LastEvaluatedKey")
@@ -509,7 +511,8 @@ def _restore_skill_levels(
         {
             "skillId": skill["skillId"],
             "skillName": skill["skillName"],
-            "lightcastCategory": skill.get("lightcastCategory", ""),
+            "category": skill.get("category", ""),
+            "subcategory": skill.get("subcategory", ""),
             "level": level,
         }
         for skill, level in zip(skill_batch, levels)
@@ -572,7 +575,8 @@ def _save_position_skill_levels(
                     "businessUnitName": position["businessUnitName"],
                     "organizationName": position["organizationName"],
                     "skillName": skill_level["skillName"],
-                    "lightcastCategory": skill_level.get("lightcastCategory", ""),
+                    "category": skill_level.get("category", ""),
+                    "subcategory": skill_level.get("subcategory", ""),
                     "level": skill_level["level"],
                     "sourceBucket": source_bucket,
                     "sourceKey": source_key,

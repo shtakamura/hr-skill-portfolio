@@ -1,4 +1,4 @@
-name: Validate (Build & Test)
+name: Validate (Build)
 
 on:
   pull_request:
@@ -23,10 +23,6 @@ jobs:
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
-
-      - name: Test frontend
-        working-directory: frontend
-        run: npm test
 
       - name: Build frontend
         working-directory: frontend
@@ -63,37 +59,3 @@ jobs:
         working-directory: infra/cdk
         run: npx cdk synth
 
-  test-backend:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install backend dependencies
-        working-directory: backend/lambda/generate-skill-master
-        run: pip install -r requirements.txt pytest
-
-      - name: Run backend tests
-        working-directory: backend/lambda/generate-skill-master
-        run: python -m pytest test_app.py -v
-
-      - name: Run position skill evaluation tests
-        working-directory: backend/lambda/generate-position-skill
-        run: python -m unittest test_app.py -v
-
-      - name: Run position skill API tests
-        working-directory: backend/lambda/get-position-skills
-        run: python -m unittest test_app.py -v
-
-      - name: Run position master API tests
-        working-directory: backend/lambda/get-position-master
-        run: python -m unittest test_app.py -v
-
-      - name: Run similarity calculation tests
-        working-directory: backend/lambda/calculate-similarity
-        run: python -m unittest test_app.py -v

@@ -7,7 +7,8 @@ type PositionSkillsApiSkill = {
   skillId: string;
   skillName: string;
   level: number;
-  lightcastCategory?: string;
+  category?: string;
+  subcategory?: string;
 };
 
 type PositionSkillsApiResponse = {
@@ -66,7 +67,8 @@ export const mapApiResponseToProfile = (
       skillName: skill.skillName,
       level: skill.level,
       maxLevel: 5,
-      ...(skill.lightcastCategory ? { lightcastCategory: skill.lightcastCategory } : {}),
+      ...(skill.category ? { category: skill.category } : {}),
+      ...(skill.subcategory ? { subcategory: skill.subcategory } : {}),
     }));
 
   if (!response.dataFound) {
