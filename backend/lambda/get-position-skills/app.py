@@ -76,7 +76,7 @@ def _build_response(
     valid_skills = _valid_skill_items(items)
     selected_skills = _top_skills(valid_skills)
     first_item = items[0] if items else {}
-    data_found = len(selected_skills) > 0
+    data_found = len(valid_skills) > 0
 
     return {
         "dataFound": data_found,
@@ -114,7 +114,8 @@ def _valid_skill_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _top_skills(skills: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return sorted(skills, key=lambda skill: (-skill["level"], skill["skillName"]))[
+    display_skills = [skill for skill in skills if skill["level"] > 0]
+    return sorted(display_skills, key=lambda skill: (-skill["level"], skill["skillName"]))[
         :MAX_SKILL_COUNT
     ]
 

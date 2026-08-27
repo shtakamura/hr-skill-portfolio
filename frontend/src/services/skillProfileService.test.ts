@@ -86,16 +86,17 @@ describe("skillProfileService", () => {
     expect(profile.skills).toEqual(mockSkillLevels);
   });
 
-  it("falls back to sample data when API has no valid skill levels", () => {
+  it("does not fall back when API data exists but no positive skill levels are returned", () => {
     const profile = mapApiResponseToProfile(position, {
       dataFound: true,
       positionId: "POS00005648",
       organizationName: "システム開発部",
       positionName: "スペシャリスト",
-      skills: [{ skillId: "s1", skillName: "不正", level: 6 }],
+      skills: [{ skillId: "s1", skillName: "不要スキル", level: 0 }],
     });
 
-    expect(profile.dataSource).toBe("sample");
+    expect(profile.dataSource).toBe("api");
+    expect(profile.skills).toEqual([]);
   });
 
   it("does not hide API errors with sample data", async () => {
